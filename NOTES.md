@@ -63,3 +63,25 @@ in this project ([`assets/data_overview.png`](assets/data_overview.png)).
 patches, so Step 5 decides how to align them with our live eye crops. And because the RLDD version has no images,
 `eyeTrack1` will use MediaPipe's own eye-blink scores instead of `eyeTrack0.5`'s output as its eye-closure signal.
 `scripts/clean_data.py` lists or deletes downloaded datasets once they are no longer needed.
+
+## Step 4: explore the data
+
+[`explore_data.py`](scripts/explore_data.py) looked at the data before any model sees it (charts in
+[`assets/explore/`](assets/explore/)). **MRL Eye is very uneven between people:** the three largest of the 37 people
+contribute 32.8% of all images, and the share of closed eyes per person ranges from 2% to 100%. If the same person
+appeared in training and test, a model could simply recognize the person and guess their usual eye state, so the
+subject-wise split in Step 5 must balance images and classes, not only count people. **MRL also hides shortcuts:**
+only 4.8% of the images from the IDS camera show closed eyes, against 58.4% from the RealSense camera, and bad
+lighting comes with more closed eyes (55.8%) than good lighting (38.5%). A model could learn "this camera's look
+means open" instead of looking at the eyelid, which is exactly the kind of thing the evaluation must check.
+
+**UTA-RLDD shows the signal is real but weak across people.** Per video, the median PERCLOS (share of frames with
+the eyes closed) is 2.2% for alert, 4.7% for low vigilant and 9.8% for drowsy drivers, and within the same person the
+drowsy video has the higher PERCLOS for 42 of 53 people. But the dots of the three classes overlap heavily between
+people, low vigilant sits close to alert, and yawning is rare in every class (median 0). Person 01, the first ID
+and not a hand-picked example, does not close the eyes more when drowsy (mean eye-closure score 0.220 vs 0.248
+when alert), but holds the head lower the whole time (mean pitch -7.9 vs +0.4 degrees). Two consequences: features should be compared with the same driver's own normal values, and
+the 3-class task will be much harder than alert vs drowsy.
+
+**PERCLOS, in one sentence:** the percentage of time the eyes are (almost) closed over a time window, the most
+widely used drowsiness measure in driver monitoring research.
