@@ -1,46 +1,43 @@
-# 👁️ eyeTracker
+# Step 1: project skeleton
 
-[![Python](https://img.shields.io/badge/python-3.12-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![PyTorch](https://img.shields.io/badge/PyTorch-2.x-EE4C2C?logo=pytorch&logoColor=white)](https://pytorch.org/)
-[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+> This branch is one step of **[eyeTracker](https://github.com/tegemenozyurek/eyeTracker)**, a real-time driver
+> monitoring system that runs in the browser. Every step of the project has its own branch, and its README explains
+> what was done in that step. The project overview is the README on [`main`](https://github.com/tegemenozyurek/eyeTracker).
+>
+> Next: [Step 2: training monitor](https://github.com/tegemenozyurek/eyeTracker/tree/step-02-training-monitor)
 
-**Real-time driver monitoring in the browser.** A normal webcam watches the driver's eyes, mouth and head and
-detects **drowsiness** (eye closure, PERCLOS, slow blinks, yawning, head nodding) and **distraction**
-(looking away from the road), with three alert levels: OK, Attention, Take a break.
+## What was done
 
-> **Work in progress.** Built step by step following [BRIEF.md](BRIEF.md). Plain-language notes for every
-> step are in [NOTES.md](NOTES.md). Results, the live demo link and charts will appear here as they are produced.
+- **Repository rules from the first commit:** a `.gitignore` that keeps datasets (`data/`), training logs (`runs/`),
+  credentials and model files out of git. Only the final weights of each model (`models/*/model.pt`) may be committed.
+- **Requirements:** PyTorch, MediaPipe, ONNX / ONNX Runtime, kagglehub, NumPy, Matplotlib, Pillow
+  ([`requirements.txt`](requirements.txt)), in a Python 3.12 virtual environment.
+- **MIT license**, a first README and [`NOTES.md`](NOTES.md), which explains every step in plain language.
+- **An environment check**, [`scripts/check_env.py`](scripts/check_env.py), run before any real work.
+- **Model names** fixed in the plan: `rules` (baseline without learning), `eyeTrack0.1`, `eyeTrack0.5`, `eyeTrack1`.
 
-## Planned models
+## Why
 
-| version | what it is | trained on |
-|---|---|---|
-| `rules` | reference baseline, no learning: eye aspect ratio, PERCLOS, yawn and head-pose thresholds | nothing |
-| `eyeTrack0.1` | small CNN, eye crop → open / closed | MRL Eye Dataset (infrared) |
-| `eyeTrack0.5` | same CNN family + RGB eyes, MediaPipe-aligned crops, webcam augmentations | MRL Eye + CEW |
-| `eyeTrack1` | temporal model over per-frame features → alert / low vigilant / drowsy | UTA-RLDD |
+Datasets, logs and credentials must never end up in git. One of the datasets (UTA-RLDD) shows people who did not all
+agree to be published, so this mattered before the first line of model code. Checking the hardware first also
+showed early what is and is not possible on this laptop.
 
-## Project layout
+## Results
 
-```
-src/               shared code: models, eye alignment, augmentation, features
-scripts/           one script per step; each prints its results and saves a chart
-tools/monitor/     live dashboard for training runs and long jobs
-models/<version>/  weights, config, training log, test report
-assets/<version>/  charts
-web/               browser demo
-data/              datasets (git-ignored, downloaded by scripts)
-runs/<version>/    live metrics read by the monitor (git-ignored)
-```
+From `python scripts/check_env.py`:
 
-## Setup
+| check | result |
+|---|---|
+| Apple GPU (MPS) | available; a small eye-sized CNN runs 3.6x faster than on the CPU (27.0 vs 98.3 ms per batch of 256 crops) |
+| Kaggle token | found, private permissions (`0o600`) |
+| free disk | 71 GB of 494 GB, so the full UTA-RLDD (111 GB) cannot fit: a smaller version is needed |
+| MediaPipe | the Python face landmarker can output blendshapes and the head-pose matrix |
+
+## Try it
 
 ```bash
+git checkout step-01-project-skeleton
 python3.12 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 python scripts/check_env.py
 ```
-
-## License
-
-Code is released under the [MIT License](LICENSE). Datasets belong to their creators and are not redistributed here.
