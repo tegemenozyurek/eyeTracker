@@ -20,6 +20,14 @@ detects **drowsiness** (eye closure, PERCLOS, slow blinks, yawning, head nodding
 | `eyeTrack0.5` | same CNN family + eyes from normal cameras, MediaPipe-aligned crops, webcam augmentations | MRL Eye + CEW |
 | `eyeTrack1` | temporal model over per-frame features → alert / low vigilant / drowsy | UTA-RLDD (MediaPipe features, no video) |
 
+## Results so far
+
+| model | MRL test (infrared) | CEW test (normal camera) | simulated webcam, MRL / CEW | training time |
+|---|---:|---:|---:|---:|
+| `eyeTrack0.1` | 97.8% | 89.3% | 60.6% / 56.3% | 7.8 min |
+
+Test people never appear in training. Full report: [`models/eyeTrack0.1/test_report.txt`](models/eyeTrack0.1/test_report.txt).
+
 ## How it was built, step by step
 
 Every step has its own branch whose README explains what was done in that step, why, and its results.
@@ -33,6 +41,7 @@ Each branch is merged into `main` and kept.
 | 4. Explore the data: person and camera biases, drowsiness signal strength | [`step-04-explore-data`](https://github.com/tegemenozyurek/eyeTracker/tree/step-04-explore-data) |
 | 5. 32x32 eye crops, subject-wise splits (no person in two splits) | [`step-05-eye-crops-splits`](https://github.com/tegemenozyurek/eyeTracker/tree/step-05-eye-crops-splits) |
 | 6. Eye CNN: 295,266 parameters, 0.75 ms for both eyes on CPU | [`step-06-define-cnn`](https://github.com/tegemenozyurek/eyeTracker/tree/step-06-define-cnn) |
+| 7. Train `eyeTrack0.1`: 97.8% MRL test, 89.3% CEW test, 60.6% simulated webcam | [`step-07-train-eyetrack01`](https://github.com/tegemenozyurek/eyeTracker/tree/step-07-train-eyetrack01) |
 
 ## Project layout
 

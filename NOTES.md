@@ -112,3 +112,24 @@ laptop's CPU both eyes take 0.75 ms ([`model_summary.py`](scripts/model_summary.
 
 **CNN, in one sentence:** a network that slides small learned filters over the image, so the same edge or curve
 detector (an eyelid line, a dark pupil) is recognised wherever it appears.
+
+## Step 7: train eyeTrack0.1
+
+`eyeTrack0.1` is the first real model: the Step 6 CNN trained for 30 epochs on the infrared eyes of the 25 MRL
+training people, with no tricks (7.8 minutes on the M4's GPU, [`train.py`](scripts/train.py)). It was watched live in
+the training monitor. On the 7 test people it has never seen, it gets **97.8%** right
+([`evaluate.py`](scripts/evaluate.py)). Validation accuracy stopped improving at about 99.0% while validation loss rose
+from 0.0320 (epoch 10) to 0.0487 (epoch 30): mild overfitting, where the model becomes more confident on its training
+eyes without becoming more correct on new ones. The camera shortcut feared in Step 4 did not appear: it catches 98.5%
+of the closed eyes from the IDS camera and 100% from the Aptina camera it never trained on (130 and 73 closed eyes, so
+small samples).
+
+**The domain gap, measured:** on CEW's normal-camera eyes the same model drops to **89.3%**, 8.5 points lower, and on
+the simulated webcam (dim light, motion blur, low resolution, noise and jitter all at once) to 60.6% on MRL and 56.3%
+on CEW, barely above the 50% of guessing. Sensor noise alone costs the most (MRL 97.8% → 67.2%). A model that is
+excellent on the data it was trained on can be almost useless on a real webcam; that is exactly what `eyeTrack0.5`
+must fix.
+
+**Domain gap, in one sentence:** the difference between the kind of images a model was trained on (here: infrared,
+sharp) and the kind it meets in use (webcam: visible light, small, noisy), which makes accuracy on the training
+kind a poor promise for the real one.

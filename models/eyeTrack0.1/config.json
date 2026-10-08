@@ -1,0 +1,27 @@
+{
+  "name": "eyeTrack0.1",
+  "sources": "mrl",
+  "augment": "none",
+  "epochs": 30,
+  "batch_size": 256,
+  "lr": 0.002,
+  "weight_decay": 0.0001,
+  "seed": 42,
+  "input": "eye32",
+  "size": 32,
+  "mean": 0.33904027938842773,
+  "std": 0.13461589813232422,
+  "classes": [
+    "closed",
+    "open"
+  ],
+  "params": 295266,
+  "train_images": 56704,
+  "val_images": 12701,
+  "device": "mps",
+  "best_epoch": 25,
+  "best_val_acc": 0.9903944730758667,
+  "epochs_done": 30,
+  "train_seconds": 469.9,
+  "status": "finished"
+}
