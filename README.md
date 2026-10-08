@@ -20,6 +20,16 @@ detects **drowsiness** (eye closure, PERCLOS, slow blinks, yawning, head nodding
 | `eyeTrack0.5` | same CNN family + RGB eyes, MediaPipe-aligned crops, webcam augmentations | MRL Eye + CEW |
 | `eyeTrack1` | temporal model over per-frame features → alert / low vigilant / drowsy | UTA-RLDD |
 
+## How it was built, step by step
+
+Every step has its own branch whose README explains what was done in that step, why, and its results.
+Each branch is merged into `main` and kept.
+
+| step | branch |
+|---|---|
+| 1. Project skeleton, environment check | [`step-01-project-skeleton`](https://github.com/tegemenozyurek/eyeTracker/tree/step-01-project-skeleton) |
+| 2. Training monitor | [`step-02-training-monitor`](https://github.com/tegemenozyurek/eyeTracker/tree/step-02-training-monitor) |
+
 ## Project layout
 
 ```
