@@ -1,67 +1,69 @@
-# 👁️ eyeTracker
+# Step 3: download the data
 
-[![Python](https://img.shields.io/badge/python-3.12-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![PyTorch](https://img.shields.io/badge/PyTorch-2.x-EE4C2C?logo=pytorch&logoColor=white)](https://pytorch.org/)
-[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+> This branch is one step of **[eyeTracker](https://github.com/tegemenozyurek/eyeTracker)**, a real-time driver
+> monitoring system that runs in the browser. Every step of the project has its own branch, and its README explains
+> what was done in that step. The project overview is the README on [`main`](https://github.com/tegemenozyurek/eyeTracker).
+>
+> Previous: [Step 2: training monitor](https://github.com/tegemenozyurek/eyeTracker/tree/step-02-training-monitor) ·
+> Next: Step 4: explore the data
 
-**Real-time driver monitoring in the browser.** A normal webcam watches the driver's eyes, mouth and head and
-detects **drowsiness** (eye closure, PERCLOS, slow blinks, yawning, head nodding) and **distraction**
-(looking away from the road), with three alert levels: OK, Attention, Take a break.
+## What was done
 
-> **Work in progress.** Built step by step following [BRIEF.md](BRIEF.md). Plain-language notes for every
-> step are in [NOTES.md](NOTES.md). Results, the live demo link and charts will appear here as they are produced.
+- **[`scripts/download_data.py`](scripts/download_data.py)** streams three datasets straight from the Kaggle API into
+  `data/` (git-ignored), with byte progress visible in the [training monitor](https://github.com/tegemenozyurek/eyeTracker/tree/step-02-training-monitor).
+  The zips are unpacked and deleted, nothing stays in hidden caches, and each dataset is checked after download.
+- **[`scripts/clean_data.py`](scripts/clean_data.py)** lists how much disk each dataset uses and deletes the ones you
+  name, after asking. Datasets can be downloaded again with one command, so they can be deleted once the models are
+  trained.
+- **UTA-RLDD without the 111 GB of video.** Instead of a subset of the original videos, we use a public version that
+  already contains MediaPipe face features per frame (1.33 GB, no images). This required two changes to the plan,
+  recorded in [`BRIEF.md`](BRIEF.md).
 
-## Planned models
+| dataset | used by | source (Kaggle) | what it is |
+|---|---|---|---|
+| MRL Eye | `eyeTrack0.1`, `eyeTrack0.5` | `imadeddinedjerarda/mrl-eye-dataset` | infrared eye crops, open / closed, original MRL file names (person ID, glasses, lighting, sensor) |
+| CEW | `eyeTrack0.5` | `faisal7/cew-dataset` | the official 24x24 eye patches of Closed Eyes In The Wild, from normal-camera photos |
+| UTA-RLDD features | `eyeTrack1` | `abdulrahmankhengari/uta-rldd-face-features` | MediaPipe blendshapes, eye/mouth openness, head pose and landmarks per frame at 10 fps; official 5-fold split |
 
-| version | what it is | trained on |
-|---|---|---|
-| `rules` | reference baseline, no learning: eye aspect ratio, PERCLOS, yawn and head-pose thresholds | nothing |
-| `eyeTrack0.1` | small CNN, eye crop → open / closed | MRL Eye Dataset (infrared) |
-| `eyeTrack0.5` | same CNN family + RGB eyes, MediaPipe-aligned crops, webcam augmentations | MRL Eye + CEW |
-| `eyeTrack1` | temporal model over per-frame features → alert / low vigilant / drowsy | UTA-RLDD |
+## Why
 
-## How it was built, step by step
+`eyeTrack0.1` learns open / closed eyes from infrared images (MRL), `eyeTrack0.5` adds eyes from normal cameras (CEW)
+to close the gap to a webcam, and `eyeTrack1` learns real drowsiness over time from UTA-RLDD. The RLDD version was
+chosen because it fits on this laptop, needs no hours of video processing, uses the same MediaPipe face landmarker as
+the browser demo, and contains no faces, so the rule "never show an RLDD face" holds by construction.
 
-Every step has its own branch whose README explains what was done in that step, why, and its results.
-Each branch is merged into `main` and kept.
+## Results
 
-| step | branch |
+From `python scripts/download_data.py`:
+
+| | |
 |---|---|
-| 1. Project skeleton, environment check | [`step-01-project-skeleton`](https://github.com/tegemenozyurek/eyeTracker/tree/step-01-project-skeleton) |
-| 2. Training monitor | [`step-02-training-monitor`](https://github.com/tegemenozyurek/eyeTracker/tree/step-02-training-monitor) |
+| MRL Eye | 84,898 images from 37 people: 41,946 closed, 42,952 open. Eye state in the file name matches the folder for all 84,898. 382 to 10,257 images per person; 28.3% with glasses |
+| CEW | 4,846 eye patches: 2,384 closed, 2,462 open |
+| UTA-RLDD features | 178 videos from 60 people (alert 60, low vigilant 60, drowsy 58), 1,115,058 frames, 283 columns per frame (52 blendshapes). 168 of 178 videos pass the dataset's own quality check |
+| disk | 1.76 GB in total (MRL 328 MB, CEW 2 MB, RLDD 1,428 MB) instead of 111 GB |
 
-## Project layout
+![Samples per class](assets/data_overview.png)
 
-```
-src/               shared code: models, eye alignment, augmentation, features
-scripts/           one script per step; each prints its results and saves a chart
-tools/monitor/     live dashboard for training runs and long jobs
-models/<version>/  weights, config, training log, test report
-assets/<version>/  charts
-web/               browser demo
-data/              datasets (git-ignored, downloaded by scripts)
-runs/<version>/    live metrics read by the monitor (git-ignored)
-```
+**Trade-offs, stated honestly:**
+- No Kaggle copy of CEW contains the face photos of both classes, only the 24x24 eye patches. Step 5 decides how to
+  align these patches with the eye crops cut from the live webcam.
+- The RLDD features were extracted by a third party, not by the dataset's authors; they are credited next to the
+  original paper. Because there are no images, `eyeTrack1` uses MediaPipe's eye-blink scores instead of
+  `eyeTrack0.5`'s eye-closure probability.
 
-## Setup
+## Try it
 
 ```bash
-python3.12 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-python scripts/check_env.py
+git checkout step-03-download-data
+python scripts/download_data.py     # ~10 minutes, 1.76 GB; needs a Kaggle token in ~/.kaggle/access_token
+python scripts/clean_data.py        # how much disk each dataset uses
 ```
 
-### Watch training live
+## Data credits
 
-```bash
-python tools/monitor/app.py        # opens http://127.0.0.1:8501
-```
-
-Every training run and long job writes its progress to `runs/<name>/metrics.jsonl`; the monitor shows live loss and
-accuracy curves, ETA, an overfitting warning, per-class precision/recall, the confusion matrix, sample predictions,
-progress bars for long jobs, a run comparison and a Stop button. Try it without any data:
-`python tools/monitor/dummy_run.py`.
-
-## License
-
-Code is released under the [MIT License](LICENSE). Datasets belong to their creators and are not redistributed here.
+- **MRL Eye Dataset:** Media Research Lab, VŠB – Technical University of Ostrava.
+- **CEW:** Song, Tan, Liu, Chen, *Eyes Closeness Detection from Still Images with Multi-scale Histograms of Principal
+  Oriented Gradients*, Pattern Recognition 2014.
+- **UTA-RLDD:** Ghoddoosian, Galib, Athitsos, *A Realistic Dataset and Baseline Temporal Model for Early Drowsiness
+  Detection*, CVPR Workshops 2019 (arXiv:1904.07312). Features: *UTA-RLDD Face Features* (Kaggle, CC BY 4.0).
