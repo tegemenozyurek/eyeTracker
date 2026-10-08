@@ -7,3 +7,4 @@ torch
 mediapipe
 onnx
 onnxruntime
+pyarrow

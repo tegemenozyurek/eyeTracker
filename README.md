@@ -17,8 +17,8 @@ detects **drowsiness** (eye closure, PERCLOS, slow blinks, yawning, head nodding
 |---|---|---|
 | `rules` | reference baseline, no learning: eye aspect ratio, PERCLOS, yawn and head-pose thresholds | nothing |
 | `eyeTrack0.1` | small CNN, eye crop → open / closed | MRL Eye Dataset (infrared) |
-| `eyeTrack0.5` | same CNN family + RGB eyes, MediaPipe-aligned crops, webcam augmentations | MRL Eye + CEW |
-| `eyeTrack1` | temporal model over per-frame features → alert / low vigilant / drowsy | UTA-RLDD |
+| `eyeTrack0.5` | same CNN family + eyes from normal cameras, MediaPipe-aligned crops, webcam augmentations | MRL Eye + CEW |
+| `eyeTrack1` | temporal model over per-frame features → alert / low vigilant / drowsy | UTA-RLDD (MediaPipe features, no video) |
 
 ## How it was built, step by step
 
@@ -29,6 +29,7 @@ Each branch is merged into `main` and kept.
 |---|---|
 | 1. Project skeleton, environment check | [`step-01-project-skeleton`](https://github.com/tegemenozyurek/eyeTracker/tree/step-01-project-skeleton) |
 | 2. Training monitor | [`step-02-training-monitor`](https://github.com/tegemenozyurek/eyeTracker/tree/step-02-training-monitor) |
+| 3. Download the data (1.76 GB) | [`step-03-download-data`](https://github.com/tegemenozyurek/eyeTracker/tree/step-03-download-data) |
 
 ## Project layout
 
@@ -51,6 +52,13 @@ pip install -r requirements.txt
 python scripts/check_env.py
 ```
 
+### Get the data
+
+```bash
+python scripts/download_data.py     # MRL Eye, CEW, UTA-RLDD features: 1.76 GB, needs a Kaggle token
+python scripts/clean_data.py        # disk use per dataset; delete the ones you no longer need
+```
+
 ### Watch training live
 
 ```bash
@@ -61,6 +69,16 @@ Every training run and long job writes its progress to `runs/<name>/metrics.json
 accuracy curves, ETA, an overfitting warning, per-class precision/recall, the confusion matrix, sample predictions,
 progress bars for long jobs, a run comparison and a Stop button. Try it without any data:
 `python tools/monitor/dummy_run.py`.
+
+## Data
+
+| dataset | used by | what it is |
+|---|---|---|
+| [MRL Eye](http://mrl.cs.vsb.cz/eyedataset) | `eyeTrack0.1`, `eyeTrack0.5` | 84,898 infrared eye crops from 37 people, open / closed |
+| [CEW](https://parnec.nuaa.edu.cn/_upload/tpl/02/db/731/template731/pages/xtan/ClosedEyeDatabases.html) | `eyeTrack0.5` | 4,846 eye patches from normal-camera photos, open / closed |
+| [UTA-RLDD](https://sites.google.com/view/utarldd/home) | `eyeTrack1` | 60 drivers, alert / low vigilant / drowsy; used as MediaPipe features (1,115,058 frames, no images) from [UTA-RLDD Face Features](https://www.kaggle.com/datasets/abdulrahmankhengari/uta-rldd-face-features) |
+
+No face from UTA-RLDD is ever shown in this project: the version used here contains numbers only.
 
 ## License
 

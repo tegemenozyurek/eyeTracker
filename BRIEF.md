@@ -41,7 +41,9 @@ Plus one **non-ML reference baseline** (`rules`) that is not counted as a model.
 | `eyeTrack0.5` | same CNN family + RGB data + MediaPipe-aligned eye crops + webcam augmentations | MRL Eye + CEW (RGB) | fixing the domain gap: cross-dataset accuracy and live-demo robustness |
 | `eyeTrack1` | temporal model (GRU or 1D-CNN) over per-frame features → alert / low-vigilant / drowsy | UTA-RLDD (real drowsiness videos) | real drowsiness, not just "eyes closed" |
 
-**Per-frame features for `eyeTrack1`:** left and right eye-closure probability from `eyeTrack0.5`, MediaPipe blendshapes
+**Per-frame features for `eyeTrack1`:** MediaPipe blendshapes
+(decision 2026-10-08: the RLDD source has no images, so `eyeTrack0.5`'s eye-closure probability cannot be a feature;
+MediaPipe's eyeBlink scores and EAR take its place)
 (eyeBlinkLeft/Right, jawOpen, and others if useful), head pose (pitch, yaw, roll from the facial
 transformation matrix), EAR, plus derived blink duration and blink rate. Use sliding windows (for example
 60 s at 5 fps). Compare `eyeTrack1` against `rules` (PERCLOS thresholds) on the same windows.
@@ -56,8 +58,8 @@ transformation matrix), EAR, plus derived blink duration and blink rate. Use sli
 | dataset | use | notes |
 |---|---|---|
 | **MRL Eye Dataset** | `eyeTrack0.1`, `eyeTrack0.5` | Infrared eye crops, open/closed labels. Mirrors on Kaggle. Check the license and cite the original authors |
-| **CEW (Closed Eyes In The Wild)** | `eyeTrack0.5` | RGB eye patches, open/closed. Mirrors on Kaggle. Cite the original paper |
-| **UTA-RLDD** | `eyeTrack1` | ~30 h, 60 participants, labels alert(0) / low vigilant(5) / drowsy(10). **111 GB in total**, so DO NOT download all of it. First check Kaggle mirrors (smaller, sometimes frame-extracted), otherwise download a subset of participants. Subsample to ~5 fps for feature extraction |
+| **CEW (Closed Eyes In The Wild)** | `eyeTrack0.5` | grayscale 24x24 eye patches from normal (visible-light) cameras, open/closed. Kaggle `faisal7/cew-dataset` (official 24x24 eye patches; no Kaggle copy has both classes of the face photos). Cite the original paper |
+| **UTA-RLDD** | `eyeTrack1` | ~30 h, 60 participants, labels alert(0) / low vigilant(5) / drowsy(10). The original is 111 GB, so (decision 2026-10-08) we use Kaggle `abdulrahmankhengari/uta-rldd-face-features` (1.33 GB): MediaPipe features per frame at 10 fps, official 5-fold split, **no video or images**, CC BY 4.0. Third-party extraction: credit it next to the original paper. Subsample to ~5 fps |
 
 **UTA-RLDD rules (must follow):**
 - Cite: Ghoddoosian, Galib, Athitsos, *A Realistic Dataset and Baseline Temporal Model for Early Drowsiness Detection*, CVPR Workshops 2019 (arXiv:1904.07312).
@@ -109,7 +111,7 @@ A Kaggle token is already on this machine (`~/.kaggle`). Keep secrets out of the
 9. Eye alignment/crop function in JS identical to Python, with a parity test.
 10. Train `eyeTrack0.5` (MRL + CEW, aligned crops, webcam augmentations); benchmark against `eyeTrack0.1`.
 11. Export to ONNX, verify against PyTorch, plug into the web demo.
-12. RLDD feature extraction at ~5 fps (progress visible in the monitor): per-frame features → windows → subject-wise folds.
+12. RLDD features (already extracted by MediaPipe, see section 3): check them, subsample to ~5 fps, per-frame features → windows → subject-wise folds.
 
 **Day 3: third model + polish**
 13. Train `eyeTrack1` (GRU or 1D-CNN); evaluate against `rules` on held-out subjects.
