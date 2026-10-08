@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Datasets (too large / licensed, downloaded by scripts). UTA-RLDD frames must never leave data/.
+data/
+
+# Live training and job logs for the monitor (tools/monitor/)
+runs/
+
+# Model artifacts
+*.h5
+*.pt
+*.pth
+
+# Secrets: never commit
+.env
+.env.*
+kaggle.json
+access_token
+.kaggle/
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
+.ipynb_checkpoints/
+
+# Local tooling
+.claude/
+
+# Trained model weights ARE committed (one per version) so evaluation and the demo run after cloning
+!models/*/model.pt

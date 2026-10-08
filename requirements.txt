@@ -1,0 +1,9 @@
+kagglehub>=1.0
+kagglesdk
+numpy
+matplotlib
+pillow
+torch
+mediapipe
+onnx
+onnxruntime
