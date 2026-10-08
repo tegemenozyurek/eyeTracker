@@ -100,3 +100,15 @@ the test set, which would have made the test a judgement of 3 individuals.
 
 One camera (Aptina) belongs to only two people, who ended up in validation and test, so the model never trains on
 it: a built-in check of how it copes with a camera it has never seen.
+
+## Step 6: define the CNN
+
+The eye model ([`src/model.py`](src/model.py)) is a small convolutional neural network: three blocks that each look
+at small 3x3 neighbourhoods of pixels, then halve the image while doubling the number of patterns they track
+(32x32 pixels → 16x16 → 8x8 → 4x4), followed by a tiny classifier that outputs two scores, closed and open.
+It has 295,266 parameters (1.18 MB), small on purpose because it must run on both eyes of every webcam frame; on the
+laptop's CPU both eyes take 0.75 ms ([`model_summary.py`](scripts/model_summary.py)). Before training, it answers
+"open" with 53.2% for every eye, which is what an untrained network should do: it has not learned anything yet.
+
+**CNN, in one sentence:** a network that slides small learned filters over the image, so the same edge or curve
+detector (an eyelid line, a dark pupil) is recognised wherever it appears.
