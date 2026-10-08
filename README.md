@@ -1,86 +1,63 @@
-# 👁️ eyeTracker
+# Step 5: eye crops and subject-wise splits
 
-[![Python](https://img.shields.io/badge/python-3.12-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![PyTorch](https://img.shields.io/badge/PyTorch-2.x-EE4C2C?logo=pytorch&logoColor=white)](https://pytorch.org/)
-[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+> This branch is one step of **[eyeTracker](https://github.com/tegemenozyurek/eyeTracker)**, a real-time driver
+> monitoring system that runs in the browser. Every step of the project has its own branch, and its README explains
+> what was done in that step. The project overview is the README on [`main`](https://github.com/tegemenozyurek/eyeTracker).
+>
+> Previous: [Step 4: explore the data](https://github.com/tegemenozyurek/eyeTracker/tree/step-04-explore-data) ·
+> Next: Step 6: define the CNN
 
-**Real-time driver monitoring in the browser.** A normal webcam watches the driver's eyes, mouth and head and
-detects **drowsiness** (eye closure, PERCLOS, slow blinks, yawning, head nodding) and **distraction**
-(looking away from the road), with three alert levels: OK, Attention, Take a break.
+## What was done
 
-> **Work in progress.** Built step by step following [BRIEF.md](BRIEF.md). Plain-language notes for every
-> step are in [NOTES.md](NOTES.md). Results, the live demo link and charts will appear here as they are produced.
+[`scripts/preprocess.py`](scripts/preprocess.py) turns every eye from MRL Eye and CEW into the exact input the model
+will get, and splits the data so that **no person appears in two splits**.
 
-## Planned models
+- **Crops:** every eye becomes a 32x32 grayscale image. Large MRL crops are shrunk by averaging blocks of pixels (the
+  way the live demo will shrink webcam eyes); CEW's 24 px patches are enlarged.
+- **MRL split by person:** a seeded search over 20,000 random person-to-split assignments keeps the one closest to
+  70 / 15 / 15% of the images, with a similar share of closed eyes in every split, every camera present in the test
+  set, and at least 10 / 5 / 7 people per split.
+- **CEW split by group:** closed eyes are grouped by the photo they were cut from (left and right eye of one face stay
+  together), open eyes by the person's name.
+- Output: `data/processed/eyes32.npz` (git-ignored) with the crops, labels, split, group and MRL recording conditions
+  (camera, lighting, glasses, reflections) for later per-condition evaluation.
 
-| version | what it is | trained on |
-|---|---|---|
-| `rules` | reference baseline, no learning: eye aspect ratio, PERCLOS, yawn and head-pose thresholds | nothing |
-| `eyeTrack0.1` | small CNN, eye crop → open / closed | MRL Eye Dataset (infrared) |
-| `eyeTrack0.5` | same CNN family + eyes from normal cameras, MediaPipe-aligned crops, webcam augmentations | MRL Eye + CEW |
-| `eyeTrack1` | temporal model over per-frame features → alert / low vigilant / drowsy | UTA-RLDD (MediaPipe features, no video) |
+## Why
 
-## How it was built, step by step
+A model tested on people it has already seen can pass by recognizing faces it memorized; Step 4 showed that MRL
+people differ wildly in how often their eyes are closed (2% to 100%). Only a split by person measures what matters
+in a car: how the model does on a **new driver**.
 
-Every step has its own branch whose README explains what was done in that step, why, and its results.
-Each branch is merged into `main` and kept.
+## Results
 
-| step | branch |
-|---|---|
-| 1. Project skeleton, environment check | [`step-01-project-skeleton`](https://github.com/tegemenozyurek/eyeTracker/tree/step-01-project-skeleton) |
-| 2. Training monitor | [`step-02-training-monitor`](https://github.com/tegemenozyurek/eyeTracker/tree/step-02-training-monitor) |
-| 3. Download the data (1.76 GB) | [`step-03-download-data`](https://github.com/tegemenozyurek/eyeTracker/tree/step-03-download-data) |
-| 4. Explore the data: person and camera biases, drowsiness signal strength | [`step-04-explore-data`](https://github.com/tegemenozyurek/eyeTracker/tree/step-04-explore-data) |
+From `python scripts/preprocess.py`:
 
-## Project layout
+| | split | images | share | closed | people / groups |
+|---|---|---:|---:|---:|---:|
+| MRL | train | 56,704 | 66.8% | 50.0% | 25 |
+| MRL | val | 12,701 | 15.0% | 48.1% | 5 |
+| MRL | test | 15,493 | 18.2% | 48.2% | 7 |
+| CEW | train | 3,396 | 70.1% | 49.2% | 1,656 |
+| CEW | val | 724 | 14.9% | 50.8% | 355 |
+| CEW | test | 726 | 15.0% | 47.4% | 354 |
 
-```
-src/               shared code: models, eye alignment, augmentation, features
-scripts/           one script per step; each prints its results and saves a chart
-tools/monitor/     live dashboard for training runs and long jobs
-models/<version>/  weights, config, training log, test report
-assets/<version>/  charts
-web/               browser demo
-data/              datasets (git-ignored, downloaded by scripts)
-runs/<version>/    live metrics read by the monitor (git-ignored)
-```
+- People or groups in more than one split: **0** (checked by the script, which refuses to save otherwise).
+- MRL test people: 7, 12, 16, 28, 29, 30, 34.
+- The Aptina camera belongs to only two people, who are in validation and test: the model never trains on it, which
+  gives a built-in test on a camera it has never seen.
 
-## Setup
+![Splits](assets/splits.png)
+![Crops](assets/crops.png)
 
-```bash
-python3.12 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-python scripts/check_env.py
-```
+**Caught and fixed:** a file-name pattern silently skipped 140 CEW eyes (photos saved as `.BMP`, `.JPG` or `.png`),
+and the first split put only 3 people in the test set, so the test would have judged 3 individuals.
 
-### Get the data
+**Still open:** CEW has no face photos, so the live eye crop cannot be checked against CEW's exact framing yet. Step 9
+fits the live crop to these 32x32 crops, and training augmentation covers small framing differences.
 
-```bash
-python scripts/download_data.py     # MRL Eye, CEW, UTA-RLDD features: 1.76 GB, needs a Kaggle token
-python scripts/clean_data.py        # disk use per dataset; delete the ones you no longer need
-```
-
-### Watch training live
+## Try it
 
 ```bash
-python tools/monitor/app.py        # opens http://127.0.0.1:8501
+git checkout step-05-eye-crops-splits
+python scripts/preprocess.py     # about 10 seconds; needs data/mrl and data/cew from Step 3
 ```
-
-Every training run and long job writes its progress to `runs/<name>/metrics.jsonl`; the monitor shows live loss and
-accuracy curves, ETA, an overfitting warning, per-class precision/recall, the confusion matrix, sample predictions,
-progress bars for long jobs, a run comparison and a Stop button. Try it without any data:
-`python tools/monitor/dummy_run.py`.
-
-## Data
-
-| dataset | used by | what it is |
-|---|---|---|
-| [MRL Eye](http://mrl.cs.vsb.cz/eyedataset) | `eyeTrack0.1`, `eyeTrack0.5` | 84,898 infrared eye crops from 37 people, open / closed |
-| [CEW](https://parnec.nuaa.edu.cn/_upload/tpl/02/db/731/template731/pages/xtan/ClosedEyeDatabases.html) | `eyeTrack0.5` | 4,846 eye patches from normal-camera photos, open / closed |
-| [UTA-RLDD](https://sites.google.com/view/utarldd/home) | `eyeTrack1` | 60 drivers, alert / low vigilant / drowsy; used as MediaPipe features (1,115,058 frames, no images) from [UTA-RLDD Face Features](https://www.kaggle.com/datasets/abdulrahmankhengari/uta-rldd-face-features) |
-
-No face from UTA-RLDD is ever shown in this project: the version used here contains numbers only.
-
-## License
-
-Code is released under the [MIT License](LICENSE). Datasets belong to their creators and are not redistributed here.
