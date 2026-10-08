@@ -1,85 +1,94 @@
-# 👁️ eyeTracker
+# Step 4: explore the data
 
-[![Python](https://img.shields.io/badge/python-3.12-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![PyTorch](https://img.shields.io/badge/PyTorch-2.x-EE4C2C?logo=pytorch&logoColor=white)](https://pytorch.org/)
-[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+> This branch is one step of **[eyeTracker](https://github.com/tegemenozyurek/eyeTracker)**, a real-time driver
+> monitoring system that runs in the browser. Every step of the project has its own branch, and its README explains
+> what was done in that step. The project overview is the README on [`main`](https://github.com/tegemenozyurek/eyeTracker).
+>
+> Previous: [Step 3: download the data](https://github.com/tegemenozyurek/eyeTracker/tree/step-03-download-data) ·
+> Next: Step 5: eye crops and subject-wise splits
 
-**Real-time driver monitoring in the browser.** A normal webcam watches the driver's eyes, mouth and head and
-detects **drowsiness** (eye closure, PERCLOS, slow blinks, yawning, head nodding) and **distraction**
-(looking away from the road), with three alert levels: OK, Attention, Take a break.
+## What was done
 
-> **Work in progress.** Built step by step following [BRIEF.md](BRIEF.md). Plain-language notes for every
-> step are in [NOTES.md](NOTES.md). Results, the live demo link and charts will appear here as they are produced.
+[`scripts/explore_data.py`](scripts/explore_data.py) looks at all three datasets before any model is built on them
+and saves six charts in [`assets/explore/`](assets/explore/). UTA-RLDD is shown as numbers and curves only: the
+version used here contains no images.
 
-## Planned models
+## Why
 
-| version | what it is | trained on |
-|---|---|---|
-| `rules` | reference baseline, no learning: eye aspect ratio, PERCLOS, yawn and head-pose thresholds | nothing |
-| `eyeTrack0.1` | small CNN, eye crop → open / closed | MRL Eye Dataset (infrared) |
-| `eyeTrack0.5` | same CNN family + eyes from normal cameras, MediaPipe-aligned crops, webcam augmentations | MRL Eye + CEW |
-| `eyeTrack1` | temporal model over per-frame features → alert / low vigilant / drowsy | UTA-RLDD (MediaPipe features, no video) |
+Before training, the data has to be understood: who is in it, how it was recorded, and whether the signal we want to
+learn is actually there. Problems found now (a few people dominating, shortcuts a model could cheat with, a weak
+signal) decide how Steps 5 to 13 are built.
 
-## How it was built, step by step
+## Results
 
-Every step has its own branch whose README explains what was done in that step, why, and its results.
-Each branch is merged into `main` and kept.
+All numbers from `python scripts/explore_data.py`.
 
-| step | branch |
-|---|---|
-| 1. Project skeleton, environment check | [`step-01-project-skeleton`](https://github.com/tegemenozyurek/eyeTracker/tree/step-01-project-skeleton) |
-| 2. Training monitor | [`step-02-training-monitor`](https://github.com/tegemenozyurek/eyeTracker/tree/step-02-training-monitor) |
-| 3. Download the data (1.76 GB) | [`step-03-download-data`](https://github.com/tegemenozyurek/eyeTracker/tree/step-03-download-data) |
+### MRL Eye: a few people dominate
 
-## Project layout
+![Images per person](assets/explore/mrl_subjects.png)
 
-```
-src/               shared code: models, eye alignment, augmentation, features
-scripts/           one script per step; each prints its results and saves a chart
-tools/monitor/     live dashboard for training runs and long jobs
-models/<version>/  weights, config, training log, test report
-assets/<version>/  charts
-web/               browser demo
-data/              datasets (git-ignored, downloaded by scripts)
-runs/<version>/    live metrics read by the monitor (git-ignored)
-```
+- 84,898 images from 37 people. The three largest people contribute **32.8%** of all images; the smallest person has
+  382 images, the median 1,114, the largest 10,257.
+- The share of closed eyes per person ranges from **2% to 100%** (median 47%). If one person were in both training and
+  test, a model could recognize the person and guess their usual eye state. The split in Step 5 must keep people
+  apart and still balance images and classes.
 
-## Setup
+### MRL Eye: shortcuts a model could learn
+
+![Recording conditions](assets/explore/mrl_attributes.png)
+
+| condition | share of images | closed eyes within it |
+|---|---:|---:|
+| RealSense camera | 82.6% | 58.4% |
+| IDS camera | 14.1% | **4.8%** |
+| Aptina camera | 3.3% | 13.6% |
+| bad lighting | 63.2% | 55.8% |
+| good lighting | 36.8% | 38.5% |
+| glasses | 28.3% | 59.4% |
+
+Eye state is tied to the camera and the lighting. A model could learn "this camera's picture means open" instead of
+looking at the eyelid, so the evaluation will also report accuracy per condition. Image width ranges from 52 to 282
+px (median 87); CEW patches are 24 px.
+
+### Infrared (MRL) vs normal camera (CEW)
+
+![Eye samples](assets/explore/eye_samples.png)
+
+The two datasets look clearly different: MRL is sharp infrared with bright reflections, CEW is small, blurry and
+lit by ordinary light, much closer to a webcam. This is the domain gap `eyeTrack0.5` is meant to close.
+
+### UTA-RLDD: the signal is real, but weak across people
+
+![Per-video signals](assets/explore/rldd_features.png)
+
+| per video (168 videos that pass quality control) | alert | low vigilant | drowsy |
+|---|---:|---:|---:|
+| median PERCLOS (share of frames with eyes closed) | 2.2% | 4.7% | 9.8% |
+| median eye-closure score (eyeBlink) | 0.195 | 0.206 | 0.295 |
+| median head-pitch spread (degrees) | 2.907 | 3.371 | 4.100 |
+
+- Within the same person, the drowsy video has the higher PERCLOS for **42 of 53** people, and the higher head-pitch
+  spread for 34 of 53.
+- Between people, the classes overlap heavily, low vigilant sits close to alert, and yawning is rare in every class
+  (median 0).
+- Consequences: compare features with the same driver's own normal values, and expect the 3-class task to be much
+  harder than alert vs drowsy.
+
+![One driver over time](assets/explore/rldd_timeline.png)
+
+Person 01 (the first ID, not a hand-picked example) does **not** close the eyes more when drowsy (mean eye-closure
+score 0.220 vs 0.248 when alert), but holds the head lower the whole time (mean pitch -7.9 vs +0.4 degrees). One signal
+alone is not enough, which is why `eyeTrack1` will look at several signals over time.
+
+![Videos](assets/explore/rldd_videos.png)
+
+Most videos are about 10 minutes long; in most of them the face is found in nearly every frame. The 10 videos below the
+dataset's 50% quality gate are left out.
+
+## Try it
 
 ```bash
-python3.12 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-python scripts/check_env.py
+git checkout step-04-explore-data
+python scripts/download_data.py      # if data/ is empty
+python scripts/explore_data.py       # about 3 seconds
 ```
-
-### Get the data
-
-```bash
-python scripts/download_data.py     # MRL Eye, CEW, UTA-RLDD features: 1.76 GB, needs a Kaggle token
-python scripts/clean_data.py        # disk use per dataset; delete the ones you no longer need
-```
-
-### Watch training live
-
-```bash
-python tools/monitor/app.py        # opens http://127.0.0.1:8501
-```
-
-Every training run and long job writes its progress to `runs/<name>/metrics.jsonl`; the monitor shows live loss and
-accuracy curves, ETA, an overfitting warning, per-class precision/recall, the confusion matrix, sample predictions,
-progress bars for long jobs, a run comparison and a Stop button. Try it without any data:
-`python tools/monitor/dummy_run.py`.
-
-## Data
-
-| dataset | used by | what it is |
-|---|---|---|
-| [MRL Eye](http://mrl.cs.vsb.cz/eyedataset) | `eyeTrack0.1`, `eyeTrack0.5` | 84,898 infrared eye crops from 37 people, open / closed |
-| [CEW](https://parnec.nuaa.edu.cn/_upload/tpl/02/db/731/template731/pages/xtan/ClosedEyeDatabases.html) | `eyeTrack0.5` | 4,846 eye patches from normal-camera photos, open / closed |
-| [UTA-RLDD](https://sites.google.com/view/utarldd/home) | `eyeTrack1` | 60 drivers, alert / low vigilant / drowsy; used as MediaPipe features (1,115,058 frames, no images) from [UTA-RLDD Face Features](https://www.kaggle.com/datasets/abdulrahmankhengari/uta-rldd-face-features) |
-
-No face from UTA-RLDD is ever shown in this project: the version used here contains numbers only.
-
-## License
-
-Code is released under the [MIT License](LICENSE). Datasets belong to their creators and are not redistributed here.
