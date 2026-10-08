@@ -1,0 +1,499 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>eyeTracker · training monitor</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📈</text></svg>">
+<style>
+:root {
+  --bg: #0b1020; --card: #121a2e; --card-2: #18213a; --border: rgb(148 163 184 / .16);
+  --text: #e8ecf5; --muted: #94a0b8; --grid: rgb(148 163 184 / .14);
+  --train: #5b9cf2; --val: #f08a4b; --good: #34d399; --warn: #f59e0b; --bad: #f43f5e;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root { --bg: #f5f6fb; --card: #fff; --card-2: #f1f3f9; --border: rgb(15 23 42 / .1);
+    --text: #0f172a; --muted: #5b6478; --grid: rgb(15 23 42 / .08); --train: #2a78d6; --val: #eb6834; color-scheme: light; }
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif; }
+.mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+header { display: flex; align-items: baseline; gap: 14px; padding: 18px 20px 6px; }
+header h1 { margin: 0; font-size: 1.35rem; letter-spacing: -.02em; }
+header h1 span { color: var(--muted); font-weight: 500; }
+#pulse { margin-left: auto; color: var(--muted); font-size: 12px; }
+.tabs { display: flex; gap: 6px; padding: 6px 20px 0; }
+.tab { border: 1px solid var(--border); background: var(--card-2); color: var(--muted); padding: 7px 14px; border-radius: 999px; cursor: pointer; font: 600 13px/1 inherit; font-family: inherit; }
+.tab[aria-selected="true"] { color: #fff; background: linear-gradient(90deg, #7c3aed, #4f46e5); border-color: transparent; }
+.layout { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 14px; padding: 14px 20px 30px; align-items: start; }
+@media (max-width: 860px) { .layout { grid-template-columns: 1fr; } }
+.card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 14px; }
+.runs { display: grid; gap: 6px; position: sticky; top: 12px; }
+.runs h2, .card h2 { margin: 0 0 8px; font-size: 13px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
+.run { display: grid; gap: 4px; padding: 9px 10px; border-radius: 10px; border: 1px solid transparent; cursor: pointer; }
+.run:hover { background: var(--card-2); }
+.run.sel { background: var(--card-2); border-color: var(--border); }
+.run-top { display: flex; align-items: center; gap: 8px; }
+.run-name { font-weight: 650; }
+.run-sub { color: var(--muted); font-size: 12px; }
+.dot { width: 9px; height: 9px; border-radius: 50%; flex: none; background: var(--muted); }
+.dot.running { background: var(--good); box-shadow: 0 0 0 3px rgb(52 211 153 / .2); }
+.dot.stalled { background: var(--warn); }
+.dot.failed { background: var(--bad); }
+.dot.stopped { background: var(--warn); }
+.bar { height: 5px; border-radius: 999px; background: var(--card-2); overflow: hidden; }
+.bar span { display: block; height: 100%; background: linear-gradient(90deg, #8b5cf6, #06b6d4); }
+main { display: grid; gap: 14px; min-width: 0; }
+.head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.head h2 { margin: 0; font-size: 1.3rem; text-transform: none; color: var(--text); letter-spacing: -.01em; }
+.badge { font-size: 12px; padding: 3px 9px; border-radius: 999px; background: var(--card-2); border: 1px solid var(--border); color: var(--muted); }
+.badge.running { color: var(--good); } .badge.failed { color: var(--bad); } .badge.stopped, .badge.stalled { color: var(--warn); }
+.btn { margin-left: auto; border: 1px solid rgb(244 63 94 / .5); background: rgb(244 63 94 / .12); color: var(--bad); padding: 8px 14px; border-radius: 10px; font: 600 13px/1 inherit; font-family: inherit; cursor: pointer; }
+.btn:disabled { opacity: .5; cursor: default; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin-top: 12px; }
+.tile { background: var(--card-2); border-radius: 10px; padding: 9px 11px; }
+.tile b { display: block; font-size: 1.15rem; font-variant-numeric: tabular-nums; }
+.tile span { color: var(--muted); font-size: 12px; }
+.warning { border: 1px solid rgb(245 158 11 / .45); background: rgb(245 158 11 / .1); color: var(--text); border-radius: 12px; padding: 11px 14px; }
+.warning b { color: var(--warn); }
+.charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 14px; }
+svg.chart { width: 100%; height: auto; display: block; }
+svg.chart text { fill: var(--muted); font-size: 11px; font-family: inherit; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; color: var(--muted); font-size: 12px; margin-top: 4px; }
+.legend i { display: inline-block; width: 14px; height: 3px; border-radius: 2px; margin-right: 6px; vertical-align: 3px; }
+.split { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+th, td { padding: 6px 8px; text-align: right; }
+th:first-child, td:first-child { text-align: left; }
+th { color: var(--muted); font-weight: 600; font-size: 12px; }
+tr + tr td { border-top: 1px solid var(--border); }
+table.cm td { text-align: center; border: 2px solid var(--card); border-radius: 6px; min-width: 64px; }
+table.cm td.lab { text-align: right; color: var(--muted); background: none !important; }
+.cm-note { color: var(--muted); font-size: 12px; margin-top: 6px; }
+.samples { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 10px; }
+.sample { text-align: center; font-size: 11.5px; }
+.sample img, .sample svg { width: 100%; aspect-ratio: 1; border-radius: 8px; border: 2px solid transparent; image-rendering: pixelated; background: #000; display: block; }
+.sample.wrong img, .sample.wrong svg { border-color: var(--bad); }
+.sample .p { font-weight: 650; }
+.sample.wrong .p { color: var(--bad); }
+.sample .t { color: var(--muted); }
+.job-bar { height: 14px; border-radius: 999px; background: var(--card-2); overflow: hidden; margin: 6px 0 10px; }
+.job-bar span { display: block; height: 100%; background: linear-gradient(90deg, #8b5cf6, #06b6d4); transition: width .3s; }
+.log { max-height: 220px; overflow: auto; font-size: 12px; color: var(--muted); display: grid; gap: 2px; }
+.empty { color: var(--muted); padding: 30px; text-align: center; }
+.check { display: flex; align-items: center; gap: 8px; padding: 6px 4px; cursor: pointer; }
+.swatch { width: 12px; height: 12px; border-radius: 3px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>eyeTracker <span>· training monitor</span></h1>
+  <span id="pulse">connecting…</span>
+</header>
+<div class="tabs" role="tablist">
+  <button class="tab" role="tab" data-tab="run" aria-selected="true">Run</button>
+  <button class="tab" role="tab" data-tab="compare" aria-selected="false">Compare runs</button>
+</div>
+
+<div class="layout">
+  <aside class="card runs"><h2>Runs</h2><div id="runList"><div class="empty">No runs yet in runs/</div></div></aside>
+
+  <main id="runView">
+    <div class="empty card" id="noRun">Pick a run on the left.</div>
+    <section class="card" id="runHead" hidden>
+      <div class="head">
+        <h2 id="runName"></h2><span class="badge" id="runStatus"></span><span class="badge" id="runKind"></span>
+        <button class="btn" id="stopBtn">Stop training</button>
+      </div>
+      <div class="tiles" id="tiles"></div>
+    </section>
+    <div class="warning" id="overfit" hidden></div>
+    <section class="charts" id="trainCharts" hidden>
+      <div class="card"><h2>Loss</h2><div id="lossChart"></div></div>
+      <div class="card"><h2>Accuracy</h2><div id="accChart"></div></div>
+    </section>
+    <section class="split" id="evalBlock" hidden>
+      <div class="card"><h2>Per class (validation, latest epoch)</h2><div id="classTable"></div></div>
+      <div class="card"><h2>Confusion matrix (latest epoch)</h2><div id="cm"></div></div>
+    </section>
+    <section class="card" id="samplesBlock" hidden>
+      <h2 id="samplesTitle">Sample predictions</h2><div class="samples" id="samples"></div>
+    </section>
+    <section class="card" id="jobBlock" hidden>
+      <h2>Progress</h2>
+      <div id="jobText"></div>
+      <div class="job-bar"><span id="jobBar"></span></div>
+    </section>
+    <section class="card" id="logBlock" hidden><h2>Messages</h2><div class="log mono" id="log"></div></section>
+  </main>
+
+  <main id="compareView" hidden>
+    <section class="card"><h2>Training runs to compare</h2><div id="compareList"></div></section>
+    <section class="charts">
+      <div class="card"><h2>Validation loss</h2><div id="cmpLoss"></div></div>
+      <div class="card"><h2>Validation accuracy</h2><div id="cmpAcc"></div></div>
+    </section>
+    <section class="card"><h2>Best epoch per run</h2><div id="cmpTable"></div></div>
+  </main>
+</div>
+
+<script>
+const POLL_MS = 3000;
+const STALL_S = 120;       // no new event for 2 minutes: the run may have crashed
+const PALETTE = ["#5b9cf2", "#f08a4b", "#34d399", "#eab308", "#e879f9", "#22d3ee", "#a78bfa"];
+const $ = (id) => document.getElementById(id);
+const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+const state = { runs: [], data: {}, selected: localStorage.getItem("monitor.run"), tab: "run",
+  compare: new Set(JSON.parse(localStorage.getItem("monitor.compare") || "[]")), now: Date.now() / 1000 };
+
+// ---------------------------------------------------------------- formatting
+
+function dur(s) {
+  if (s == null || !isFinite(s)) return "–";
+  s = Math.max(0, Math.round(s));
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+  return h ? `${h} h ${m} min` : m ? `${m} min ${sec} s` : `${sec} s`;
+}
+const pct = (x, d = 1) => (x == null ? "–" : `${(x * 100).toFixed(d)}%`);
+const num = (x, d = 4) => (x == null ? "–" : Number(x).toFixed(d));
+const lr = (x) => (x == null ? "–" : Number(x).toExponential(1));
+
+// ---------------------------------------------------------------- data
+
+function blank() {
+  return { offset: 0, start: null, end: null, steps: [], epochs: [], progress: [], messages: [], samplesEpoch: null, samplesShown: null, samples: null };
+}
+
+async function fetchEvents(name) {
+  const d = state.data[name] ??= blank();
+  const r = await (await fetch(`/api/events?name=${encodeURIComponent(name)}&from=${d.offset}`)).json();
+  if (r.reset) Object.assign(d, blank());
+  for (const e of r.events) {
+    if (e.type === "start") Object.assign(d, blank(), { start: e });
+    else if (e.type === "step") d.steps.push(e);
+    else if (e.type === "epoch") d.epochs.push(e);
+    else if (e.type === "progress") d.progress.push(e);
+    else if (e.type === "samples") d.samplesEpoch = e.epoch;
+    else if (e.type === "message") d.messages.push(e);
+    else if (e.type === "end") d.end = e;
+    d.updated = e.time;
+  }
+  d.offset = r.next;
+  if (d.samplesEpoch != null && d.samplesEpoch !== d.samplesShown) {
+    d.samples = await (await fetch(`/api/samples?name=${encodeURIComponent(name)}`)).json();
+    d.samplesShown = d.samplesEpoch;
+  }
+  return d;
+}
+
+function statusOf(info) {
+  if (info.status && info.status !== "running") return info.status;
+  return state.now - (info.updated ?? 0) > STALL_S ? "stalled" : "running";
+}
+
+// ---------------------------------------------------------------- chart (plain SVG)
+
+function ticks(lo, hi, n = 5) {
+  if (hi - lo < 1e-12) { lo -= 0.5; hi += 0.5; }
+  const raw = (hi - lo) / n, mag = 10 ** Math.floor(Math.log10(raw));
+  const step = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((s) => s >= raw);
+  const out = [];
+  for (let v = Math.ceil(lo / step) * step; v <= hi + step * 1e-6; v += step) out.push(+v.toFixed(10));
+  return out;
+}
+
+function chart(el, series, { yFmt = (v) => v, xLabel = "epoch", vline = null, yMin = null } = {}) {
+  const pts = series.flatMap((s) => s.points);
+  if (!pts.length) { el.innerHTML = `<div class="empty">no data yet</div>`; return; }
+  const W = 560, H = 250, L = 52, R = 14, T = 12, B = 32;
+  let x0 = 0, x1 = Math.max(1, ...pts.map((p) => p[0]));
+  let y0 = Math.min(...pts.map((p) => p[1])), y1 = Math.max(...pts.map((p) => p[1]));
+  if (yMin != null) y0 = Math.min(y0, yMin);
+  const pad = (y1 - y0) * 0.08 || 0.05; y0 -= pad; y1 += pad;
+  const yt = ticks(y0, y1), xt = ticks(x0, x1, 6).filter((v) => Number.isInteger(v) || x1 < 4);
+  y0 = Math.min(y0, yt[0]); y1 = Math.max(y1, yt[yt.length - 1]);
+  const X = (v) => L + ((v - x0) / (x1 - x0)) * (W - L - R), Y = (v) => T + (1 - (v - y0) / (y1 - y0)) * (H - T - B);
+  let svg = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img">`;
+  for (const v of yt) svg += `<line x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}" stroke="${css("--grid")}"/>` +
+    `<text x="${L - 8}" y="${Y(v) + 4}" text-anchor="end">${yFmt(v)}</text>`;
+  for (const v of xt) svg += `<text x="${X(v)}" y="${H - 12}" text-anchor="middle">${v}</text>`;
+  svg += `<text x="${W - R}" y="${H - 1}" text-anchor="end">${xLabel}</text>`;
+  if (vline != null) {
+    const right = X(vline.x) > W - 110;  // near the right edge: put the label on the left of the line
+    svg += `<line x1="${X(vline.x)}" x2="${X(vline.x)}" y1="${T}" y2="${H - B}" stroke="${css("--muted")}" stroke-dasharray="4 4"/>` +
+      `<text x="${X(vline.x) + (right ? -5 : 5)}" y="${T + 11}" text-anchor="${right ? "end" : "start"}">${esc(vline.label)}</text>`;
+  }
+  for (const s of series) {
+    if (!s.points.length) continue;
+    const d = s.points.map((p, i) => `${i ? "L" : "M"}${X(p[0]).toFixed(1)},${Y(p[1]).toFixed(1)}`).join("");
+    svg += `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="${s.width ?? 2}" stroke-opacity="${s.opacity ?? 1}" ` +
+      `stroke-linejoin="round" stroke-linecap="round" ${s.dash ? `stroke-dasharray="${s.dash}"` : ""}/>`;
+    if (s.dots) for (const p of s.points) svg += `<circle cx="${X(p[0])}" cy="${Y(p[1])}" r="2.6" fill="${s.color}"/>`;
+  }
+  svg += `</svg>`;
+  const legend = series.filter((s) => s.label).map((s) =>
+    `<span><i style="background:${s.color};opacity:${s.opacity ?? 1}"></i>${esc(s.label)}</span>`).join("");
+  el.innerHTML = svg + `<div class="legend">${legend}</div>`;
+}
+
+// ---------------------------------------------------------------- run list
+
+function renderRunList() {
+  const list = $("runList");
+  if (!state.runs.length) { list.innerHTML = `<div class="empty">No runs yet in runs/</div>`; return; }
+  const html = state.runs.map((r) => {
+    const st = statusOf(r);
+    let sub = r.kind === "job" ? (r.total ? `${r.done ?? 0} / ${r.total}` : "") :
+      (r.epochs ? `epoch ${r.epoch ?? 0} / ${r.epochs}` : "");
+    if (r.val_acc != null) sub += ` · val ${pct(r.val_acc)}`;
+    const frac = r.kind === "job" ? (r.total ? (r.done ?? 0) / r.total : 0) : (r.epochs ? (r.epoch ?? 0) / r.epochs : 0);
+    return `<div class="run ${r.name === state.selected ? "sel" : ""}" data-name="${esc(r.name)}">` +
+      `<div class="run-top"><span class="dot ${st}"></span><span class="run-name">${esc(r.name)}</span></div>` +
+      `<div class="run-sub">${st} · ${esc(sub)}</div><div class="bar"><span style="width:${(frac * 100).toFixed(1)}%"></span></div></div>`;
+  }).join("");
+  if (html !== list.dataset.html) { list.innerHTML = html; list.dataset.html = html; }  // rebuild only when something changed
+}
+
+// pointerdown, not click: the list is rebuilt while runs progress, which would swallow a click in progress
+$("runList").addEventListener("pointerdown", (e) => {
+  const el = e.target.closest(".run");
+  if (!el) return;
+  state.selected = el.dataset.name;
+  localStorage.setItem("monitor.run", state.selected);
+  setTab("run");
+  refresh();
+});
+
+// ---------------------------------------------------------------- run view
+
+function eta(d) {
+  const s = d.start, now = d.end ? d.end.time : state.now, elapsed = now - s.time;
+  if (d.end) return { elapsed, eta: 0 };
+  if (s.kind === "job") {
+    const p = d.progress.at(-1);
+    return { elapsed, eta: p && p.done ? (elapsed / p.done) * (p.total - p.done) : null };
+  }
+  const total = s.epochs, spe = s.steps_per_epoch;
+  const done = d.epochs.length, last = d.steps.at(-1);
+  const frac = last && spe && last.epoch === done + 1 ? (last.step + 1) / spe : 0;
+  const progress = done + frac;  // epochs completed, fractional
+  return { elapsed, eta: progress > 0 && total ? (elapsed / progress) * (total - progress) : null };
+}
+
+function overfitting(epochs) {
+  const v = epochs.map((e) => e.val_loss), t = epochs.map((e) => e.train_loss);
+  if (v.length < 4 || v.some((x) => x == null) || t.some((x) => x == null)) return null;
+  const n = v.length, k = 3, best = v.indexOf(Math.min(...v));
+  const valUp = v[n - 1] > v[n - 1 - k] && v[n - 1] > v[best] * 1.02 && n - 1 - best >= 2;
+  const trainDown = t[n - 1] < t[n - 1 - k];
+  if (!(valUp && trainDown)) return null;
+  return `<b>Overfitting warning.</b> Validation loss has gone up for ${n - 1 - best} epochs since its lowest point ` +
+    `(epoch ${epochs[best].epoch}, ${num(v[best])} → ${num(v[n - 1])}) while training loss kept falling ` +
+    `(${num(t[n - 1 - k])} → ${num(t[n - 1])}). The model is starting to memorize the training data instead of learning ` +
+    `patterns that generalize; the best checkpoint is the one saved at the lowest validation loss / best score.`;
+}
+
+function renderRun() {
+  const d = state.data[state.selected];
+  $("noRun").hidden = !!(d && d.start);
+  for (const id of ["runHead", "trainCharts", "evalBlock", "samplesBlock", "jobBlock", "logBlock", "overfit"]) $(id).hidden = true;
+  if (!d || !d.start) return;
+  const s = d.start, isJob = s.kind === "job";
+  const info = state.runs.find((r) => r.name === state.selected) ?? {};
+  const st = d.end ? d.end.status : statusOf({ updated: d.updated });
+  $("runHead").hidden = false;
+  $("runName").textContent = state.selected;
+  $("runStatus").textContent = st;
+  $("runStatus").className = `badge ${st}`;
+  $("runKind").textContent = isJob ? "job" : "training";
+  const stopBtn = $("stopBtn");
+  stopBtn.hidden = isJob || !!d.end;
+  if (!d.stopSent) { stopBtn.disabled = false; stopBtn.textContent = "Stop training"; }
+  const { elapsed, eta: left } = eta(d);
+  const tiles = [];
+  if (isJob) {
+    const p = d.progress.at(-1);
+    tiles.push([p ? `${p.done.toLocaleString("en")} / ${p.total.toLocaleString("en")}` : "–", s.unit ?? "done"]);
+    tiles.push([p && elapsed > 0 ? `${(p.done / elapsed).toFixed(1)}/s` : "–", "rate"]);
+  } else {
+    const last = d.steps.at(-1), ep = d.epochs.at(-1);
+    const bestEp = [...d.epochs].reverse().find((e) => e.best);
+    tiles.push([`${d.epochs.length} / ${s.epochs ?? "?"}`, "epochs done"]);
+    tiles.push([last ? `${last.step + 1} / ${s.steps_per_epoch ?? "?"}` : "–", `step in epoch ${last ? last.epoch : "–"}`]);
+    tiles.push([lr(last?.lr ?? ep?.lr), "learning rate"]);
+    tiles.push([bestEp ? pct(bestEp.val_acc) : "–", bestEp ? `best val acc · epoch ${bestEp.epoch}` : "best val acc"]);
+    if (ep?.epoch_time) tiles.push([dur(ep.epoch_time), "last epoch took"]);
+  }
+  tiles.push([dur(elapsed), "elapsed"]);
+  tiles.push([d.end ? "done" : dur(left), "ETA"]);
+  $("tiles").innerHTML = tiles.map(([v, l]) => `<div class="tile"><b>${esc(v)}</b><span>${esc(l)}</span></div>`).join("");
+
+  if (isJob) renderJob(d); else renderTraining(d);
+
+  const msgs = d.messages.map((m) => `<div>${new Date(m.time * 1000).toLocaleTimeString()}  ${esc(m.text)}</div>`);
+  if (d.end) msgs.push(`<div>${new Date(d.end.time * 1000).toLocaleTimeString()}  run ${esc(d.end.status)}` +
+    `${d.end.error ? ": " + esc(d.end.error) : ""}</div>`);
+  if (msgs.length) { $("logBlock").hidden = false; $("log").innerHTML = msgs.join(""); }
+}
+
+function renderTraining(d) {
+  const s = d.start, spe = s.steps_per_epoch || 1;
+  const stepX = (e) => e.epoch - 1 + (e.step + 1) / spe;
+  const bestEp = [...d.epochs].reverse().find((e) => e.best);
+  const vline = bestEp ? { x: bestEp.epoch, label: `best epoch ${bestEp.epoch}` } : null;
+  const train = css("--train"), val = css("--val");
+  $("trainCharts").hidden = false;
+  chart($("lossChart"), [
+    { label: "train (per step)", color: train, width: 1.2, opacity: 0.35, points: d.steps.filter((e) => e.loss != null).map((e) => [stepX(e), e.loss]) },
+    { label: "train (epoch)", color: train, dots: true, points: d.epochs.filter((e) => e.train_loss != null).map((e) => [e.epoch, e.train_loss]) },
+    { label: "validation", color: val, dots: true, points: d.epochs.filter((e) => e.val_loss != null).map((e) => [e.epoch, e.val_loss]) },
+  ], { vline, yFmt: (v) => v.toFixed(2) });
+  chart($("accChart"), [
+    { label: "train (per step)", color: train, width: 1.2, opacity: 0.35, points: d.steps.filter((e) => e.acc != null).map((e) => [stepX(e), e.acc]) },
+    { label: "train (epoch)", color: train, dots: true, points: d.epochs.filter((e) => e.train_acc != null).map((e) => [e.epoch, e.train_acc]) },
+    { label: "validation", color: val, dots: true, points: d.epochs.filter((e) => e.val_acc != null).map((e) => [e.epoch, e.val_acc]) },
+  ], { vline, yFmt: (v) => `${Math.round(v * 100)}%` });
+
+  const warn = overfitting(d.epochs);
+  $("overfit").hidden = !warn;
+  if (warn) $("overfit").innerHTML = warn;
+
+  const ep = [...d.epochs].reverse().find((e) => e.confusion);
+  if (ep) {
+    const classes = s.classes ?? ep.confusion.map((_, i) => `class ${i}`);
+    const cm = ep.confusion, support = cm.map((r) => r.reduce((a, b) => a + b, 0));
+    const f1 = ep.precision.map((p, i) => (p + ep.recall[i] ? (2 * p * ep.recall[i]) / (p + ep.recall[i]) : 0));
+    $("evalBlock").hidden = false;
+    $("classTable").innerHTML = `<table><tr><th>class</th><th>precision</th><th>recall</th><th>F1</th><th>support</th></tr>` +
+      classes.map((c, i) => `<tr><td>${esc(c)}</td><td>${pct(ep.precision[i])}</td><td>${pct(ep.recall[i])}</td>` +
+        `<td>${pct(f1[i])}</td><td>${support[i].toLocaleString("en")}</td></tr>`).join("") +
+      `<tr><td><b>macro avg</b></td><td>${pct(avg(ep.precision))}</td><td>${pct(avg(ep.recall))}</td><td>${pct(avg(f1))}</td>` +
+      `<td>${support.reduce((a, b) => a + b, 0).toLocaleString("en")}</td></tr></table>` +
+      `<div class="cm-note">epoch ${ep.epoch}</div>`;
+    $("cm").innerHTML = `<table class="cm"><tr><td class="lab"></td>${classes.map((c) => `<th>${esc(c)}</th>`).join("")}</tr>` +
+      cm.map((row, i) => `<tr><td class="lab">${esc(classes[i])}</td>` + row.map((v) => {
+        const share = support[i] ? v / support[i] : 0;
+        return `<td style="background:rgb(91 156 242 / ${(0.08 + 0.75 * share).toFixed(2)})">${pct(share, 0)}<br>` +
+          `<span class="cm-note">${v.toLocaleString("en")}</span></td>`;
+      }).join("") + `</tr>`).join("") + `</table><div class="cm-note">rows: true class · columns: predicted · % of the row</div>`;
+  }
+
+  const sm = d.samples;
+  if (sm && sm.items.length) {
+    $("samplesBlock").hidden = false;
+    const wrong = sm.items.filter((it) => it.true !== it.pred).length;
+    $("samplesTitle").textContent = `Sample predictions (epoch ${sm.epoch}): ${wrong} of ${sm.items.length} wrong, outlined in red`;
+    $("samples").innerHTML = sm.items.map((it) => {
+      const ok = it.true === it.pred;
+      const visual = it.image ? `<img src="data:image/png;base64,${it.image}" alt="">` : sparkline(it.series);
+      return `<div class="sample ${ok ? "" : "wrong"}">${visual}` +
+        `<div class="p">${ok ? "✓" : "✗"} ${esc(it.pred)} ${it.conf != null ? pct(it.conf, 0) : ""}</div>` +
+        `<div class="t">true: ${esc(it.true)}</div></div>`;
+    }).join("");
+  }
+}
+
+const avg = (a) => a.reduce((x, y) => x + y, 0) / a.length;
+
+// Feature curves of one window (RLDD): one small line per feature, never an image of a face.
+function sparkline(series = {}) {
+  const names = Object.keys(series);
+  let svg = `<svg viewBox="0 0 100 100" style="background:var(--card-2)">`;
+  names.forEach((n, i) => {
+    const v = series[n], lo = Math.min(...v), hi = Math.max(...v), span = hi - lo || 1;
+    const d = v.map((y, j) => `${j ? "L" : "M"}${((j / (v.length - 1)) * 96 + 2).toFixed(1)},${(96 - ((y - lo) / span) * 92).toFixed(1)}`).join("");
+    svg += `<path d="${d}" fill="none" stroke="${PALETTE[i % PALETTE.length]}" stroke-width="1.6"><title>${esc(n)}</title></path>`;
+  });
+  return svg + `</svg>`;
+}
+
+function renderJob(d) {
+  const p = d.progress.at(-1);
+  $("jobBlock").hidden = false;
+  const frac = p && p.total ? p.done / p.total : 0;
+  $("jobBar").style.width = `${(frac * 100).toFixed(1)}%`;
+  $("jobText").innerHTML = p ? `<b>${pct(frac)}</b> · ${p.done.toLocaleString("en")} of ${p.total.toLocaleString("en")} ` +
+    `${esc(d.start.unit ?? "")}${p.message ? ` · <span class="mono">${esc(p.message)}</span>` : ""}` : "waiting for the first progress update…";
+}
+
+$("stopBtn").addEventListener("click", async () => {
+  const name = state.selected;
+  if (!confirm(`Stop ${name}? The best checkpoint so far is kept and the script exits cleanly.`)) return;
+  await fetch(`/api/stop?name=${encodeURIComponent(name)}`, { method: "POST" });
+  state.data[name].stopSent = true;
+  $("stopBtn").disabled = true;
+  $("stopBtn").textContent = "stop requested…";
+});
+
+// ---------------------------------------------------------------- compare
+
+function renderCompare() {
+  const runs = state.runs.filter((r) => r.kind === "train");
+  const list = $("compareList");
+  const html = runs.length ? runs.map((r, i) =>
+    `<label class="check"><input type="checkbox" data-name="${esc(r.name)}" ${state.compare.has(r.name) ? "checked" : ""}>` +
+    `<span class="swatch" style="background:${PALETTE[i % PALETTE.length]}"></span>${esc(r.name)}` +
+    `<span class="run-sub">· ${statusOf(r)}</span></label>`).join("") : `<div class="empty">No training runs yet</div>`;
+  if (html !== list.dataset.html) { list.innerHTML = html; list.dataset.html = html; }  // keep checkboxes clickable
+  const chosen = runs.map((r, i) => ({ r, color: PALETTE[i % PALETTE.length] })).filter(({ r }) => state.compare.has(r.name));
+  const series = (key) => chosen.map(({ r, color }) => ({ label: r.name, color, dots: true,
+    points: (state.data[r.name]?.epochs ?? []).filter((e) => e[key] != null).map((e) => [e.epoch, e[key]]) }));
+  chart($("cmpLoss"), series("val_loss"), { yFmt: (v) => v.toFixed(2) });
+  chart($("cmpAcc"), series("val_acc"), { yFmt: (v) => `${Math.round(v * 100)}%` });
+  $("cmpTable").innerHTML = chosen.length ? `<table><tr><th>run</th><th>best val acc</th><th>at epoch</th><th>val loss there</th>` +
+    `<th>epochs</th><th>training time</th></tr>` + chosen.map(({ r }) => {
+      const d = state.data[r.name] ?? blank();
+      const best = d.epochs.reduce((b, e) => (e.val_acc != null && (!b || e.val_acc > b.val_acc) ? e : b), null);
+      const time = d.epochs.reduce((a, e) => a + (e.epoch_time ?? 0), 0);
+      return `<tr><td>${esc(r.name)}</td><td>${pct(best?.val_acc)}</td><td>${best?.epoch ?? "–"}</td><td>${num(best?.val_loss)}</td>` +
+        `<td>${d.epochs.length}</td><td>${dur(time)}</td></tr>`;
+    }).join("") + `</table>` : `<div class="empty">Tick runs above to overlay their curves.</div>`;
+}
+
+$("compareList").addEventListener("change", (e) => {
+  const name = e.target.dataset.name;
+  if (!name) return;
+  e.target.checked ? state.compare.add(name) : state.compare.delete(name);
+  localStorage.setItem("monitor.compare", JSON.stringify([...state.compare]));
+  refresh();
+});
+
+function setTab(tab) {
+  state.tab = tab;
+  for (const b of document.querySelectorAll(".tab")) b.setAttribute("aria-selected", String(b.dataset.tab === tab));
+  $("runView").hidden = tab !== "run";
+  $("compareView").hidden = tab !== "compare";
+}
+for (const b of document.querySelectorAll(".tab")) b.addEventListener("click", () => { setTab(b.dataset.tab); refresh(); });
+
+// ---------------------------------------------------------------- loop
+
+let busy = false;
+async function refresh() {
+  if (busy) return;
+  busy = true;
+  try {
+    const r = await (await fetch("/api/runs")).json();
+    state.runs = r.runs;
+    state.now = r.now;
+    if (!state.selected || !state.runs.some((x) => x.name === state.selected)) state.selected = state.runs[0]?.name ?? null;
+    const needed = state.tab === "run" ? [state.selected] : [...state.compare].filter((n) => state.runs.some((x) => x.name === n));
+    for (const name of needed.filter(Boolean)) await fetchEvents(name);
+    renderRunList();
+    state.tab === "run" ? renderRun() : renderCompare();
+    $("pulse").textContent = `updated ${new Date().toLocaleTimeString()} · every ${POLL_MS / 1000} s`;
+  } catch (err) {
+    $("pulse").textContent = `monitor server not reachable (${err.message})`;
+  } finally {
+    busy = false;
+  }
+}
+refresh();
+setInterval(refresh, POLL_MS);
+</script>
+</body>
+</html>

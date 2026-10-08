@@ -31,3 +31,18 @@ What we reuse from emotionDetecter, instead of reinventing it:
   degradations as a fixed "simulated webcam" test
 - **ONNX export checked against PyTorch**, ONNX Runtime Web in the browser (WebGPU, WASM fallback)
 - **smoothing over time** so the live label does not flicker; model picker with hover cards; GitHub Pages deployment
+
+## Step 2: training monitor
+
+Before training anything real, I built a live dashboard ([`tools/monitor/`](tools/monitor/)) so every run can be
+watched while it happens instead of judged only at the end. Training scripts write one line per event to
+`runs/<name>/metrics.jsonl` through [`src/runlog.py`](src/runlog.py); a small local server reads those files and the
+page redraws every 3 seconds: loss and accuracy curves, ETA, per-class precision/recall, a confusion matrix, sample
+predictions with mistakes outlined in red, progress bars for downloads, and a comparison of runs. Writing the log is
+cheap, 189 µs per training step and 4.8 ms per epoch (measured by [`dummy_run.py`](tools/monitor/dummy_run.py)), so the
+monitor cannot slow training down. A fake run that was built to overfit tested it: validation loss bottomed out at
+epoch 8 and then rose while training loss kept falling, and the monitor flagged this as overfitting. Pressing Stop on
+a second fake run ended it cleanly during epoch 9, keeping the best checkpoint from epoch 8.
+
+**Overfitting, in one sentence:** the model starts memorizing its training examples instead of learning the general
+pattern, which shows up as training loss still falling while validation loss (on examples it never trains on) rises.

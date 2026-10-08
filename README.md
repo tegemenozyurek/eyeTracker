@@ -41,6 +41,17 @@ pip install -r requirements.txt
 python scripts/check_env.py
 ```
 
+### Watch training live
+
+```bash
+python tools/monitor/app.py        # opens http://127.0.0.1:8501
+```
+
+Every training run and long job writes its progress to `runs/<name>/metrics.jsonl`; the monitor shows live loss and
+accuracy curves, ETA, an overfitting warning, per-class precision/recall, the confusion matrix, sample predictions,
+progress bars for long jobs, a run comparison and a Stop button. Try it without any data:
+`python tools/monitor/dummy_run.py`.
+
 ## License
 
 Code is released under the [MIT License](LICENSE). Datasets belong to their creators and are not redistributed here.
