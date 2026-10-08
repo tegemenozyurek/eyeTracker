@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>eyeTracker · live</title>
+<meta name="description" content="Real-time driver monitoring (drowsiness and distraction) that runs entirely in your browser. Video never leaves your device.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>👁️</text></svg>">
+<link rel="stylesheet" href="style.css?v=1">
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <h1>eye<span>Tracker</span></h1>
+    <p>Driver drowsiness and distraction monitoring · runs entirely in your browser</p>
+  </div>
+  <a class="gh" href="https://github.com/tegemenozyurek/eyeTracker" target="_blank" rel="noopener">GitHub ↗</a>
+</header>
+
+<main class="layout">
+  <section class="stage card">
+    <div class="toolbar">
+      <div class="models" id="models" role="radiogroup" aria-label="Model"></div>
+      <span class="stats" id="stats">loading…</span>
+    </div>
+
+    <div class="viewport" id="viewport">
+      <video id="video" playsinline muted></video>
+      <canvas id="overlay"></canvas>
+      <div class="banner" id="banner" hidden></div>
+      <div class="empty" id="empty">
+        <div class="empty-icon">🚗</div>
+        <p>Turn on your camera and look at the screen as if it were the road.</p>
+        <p class="muted">The first 3 seconds set where "the road" is. Video never leaves this device.</p>
+      </div>
+    </div>
+
+    <div class="controls">
+      <button id="camera" class="btn primary" disabled>Start camera</button>
+      <label class="btn" for="file">Use a video file</label>
+      <input type="file" id="file" accept="video/*" hidden>
+      <button id="recalibrate" class="btn" disabled>Recalibrate</button>
+      <span class="spacer"></span>
+      <label class="switch"><input type="checkbox" id="sound"><span></span>Sound</label>
+      <label class="switch"><input type="checkbox" id="mesh" checked><span></span>Landmarks</label>
+      <label class="switch"><input type="checkbox" id="showCrops"><span></span>Model input</label>
+    </div>
+  </section>
+
+  <aside class="panel card">
+    <div class="state" id="state" data-level="none">
+      <div class="state-label" id="stateLabel">No driver yet</div>
+      <div class="state-sub" id="stateSub">Start the camera</div>
+    </div>
+
+    <div class="tiles">
+      <div class="tile"><span class="k">Left eye</span><b id="eyeL">–</b><i class="meter"><span id="eyeLBar"></span></i></div>
+      <div class="tile"><span class="k">Right eye</span><b id="eyeR">–</b><i class="meter"><span id="eyeRBar"></span></i></div>
+      <div class="tile"><span class="k">Blinks</span><b id="blinks">–</b><span class="v" id="blinkInfo"></span></div>
+      <div class="tile"><span class="k">Yawns (5 min)</span><b id="yawns">–</b><span class="v" id="yawnInfo"></span></div>
+      <div class="tile wide">
+        <span class="k">PERCLOS · eyes closed, last 60 s</span><b id="perclos">–</b>
+        <i class="meter perclos"><span id="perclosBar"></span><em class="mark a"></em><em class="mark b"></em></i>
+        <span class="v" id="perclosInfo"></span>
+      </div>
+      <div class="tile wide">
+        <span class="k">Head pose · pitch / yaw / roll</span><b id="pose">–</b><span class="v" id="poseInfo"></span>
+      </div>
+      <div class="tile wide">
+        <span class="k">Eyes off the road</span><b id="offroad">–</b><span class="v" id="offroadInfo"></span>
+      </div>
+    </div>
+
+    <div class="spark"><div class="k">Eye closure, last 60 s</div><canvas id="spark" height="60"></canvas></div>
+
+    <div class="crops" id="crops" hidden>
+      <div class="k">What a model would see (32x32 eye crops)</div>
+      <div class="crops-row"><canvas id="cropR" width="32" height="32"></canvas><canvas id="cropL" width="32" height="32"></canvas></div>
+      <div class="note">Box crops for now; Step 9 replaces them with the aligned crop shared with training.</div>
+    </div>
+  </aside>
+</main>
+
+<section class="about">
+  <details class="fold">
+  <summary><span>How it works</span><span class="chev" aria-hidden="true">›</span></summary>
+  <ol class="pipeline">
+    <li><b>Track</b><span>MediaPipe finds 478 face points, 52 expression scores and the head's rotation in every frame</span></li>
+    <li><b>Measure</b><span>eye closure, blinks, PERCLOS over 60 s, yawns, head pose, time with the eyes off the road</span></li>
+    <li><b>Decide</b><span>the selected model turns these into OK, Attention or Take a break</span></li>
+    <li><b>Hold</b><span>an alert steps down only after it has been gone for a few seconds, so it does not flicker</span></li>
+  </ol>
+  </details>
+</section>
+
+<footer>
+  A learning project, not a safety system: never rely on it while driving.
+  <p class="note">The camera feed is processed only on this device. No image or video is uploaded or stored.</p>
+</footer>
+
+<script type="module" src="app.js?v=1"></script>
+</body>
+</html>
