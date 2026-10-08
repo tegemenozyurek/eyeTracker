@@ -85,3 +85,18 @@ the 3-class task will be much harder than alert vs drowsy.
 
 **PERCLOS, in one sentence:** the percentage of time the eyes are (almost) closed over a time window, the most
 widely used drowsiness measure in driver monitoring research.
+
+## Step 5: eye crops and subject-wise splits
+
+[`preprocess.py`](scripts/preprocess.py) turned all 89,744 eyes (84,898 MRL, 4,846 CEW) into 32x32 grayscale crops
+and split them into training, validation and test data so that **no person appears in two splits**. This matters
+because a model tested on people it has already seen can pass by recognizing faces it memorized, which says nothing
+about a new driver. MRL's 37 people were assigned by a seeded search over 20,000 random assignments: 25 people
+(66.8% of images) for training, 5 (15.0%) for validation and 7 (18.2%) for testing, with 48% to 50% closed eyes in
+every split and every camera present in the test set. CEW has no person IDs for closed eyes, so its eyes are grouped
+by source photo (left and right eye of a face stay together) and open eyes by person name. Two problems were caught
+and fixed on the way: a file-name pattern silently skipped 140 CEW eyes, and the first split put only 3 people in
+the test set, which would have made the test a judgement of 3 individuals.
+
+One camera (Aptina) belongs to only two people, who ended up in validation and test, so the model never trains on
+it: a built-in check of how it copes with a camera it has never seen.
