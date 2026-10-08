@@ -131,7 +131,14 @@ def main():
     parser.add_argument("--no-browser", action="store_true")
     args = parser.parse_args()
     url = f"http://127.0.0.1:{args.port}"
-    server = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
+    try:
+        server = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
+    except OSError:  # port taken: most likely the monitor is already running
+        print(f"Port {args.port} is already in use, probably by a monitor that is already running: opening {url}\n"
+              f"(to start a second one, use --port {args.port + 1})")
+        if not args.no_browser:
+            webbrowser.open(url)
+        return
     print(f"Training monitor: {url}  (reading {RUNS})  Ctrl+C to quit")
     if not args.no_browser:
         threading.Timer(0.5, webbrowser.open, [url]).start()
