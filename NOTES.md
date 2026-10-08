@@ -46,3 +46,20 @@ a second fake run ended it cleanly during epoch 9, keeping the best checkpoint f
 
 **Overfitting, in one sentence:** the model starts memorizing its training examples instead of learning the general
 pattern, which shows up as training loss still falling while validation loss (on examples it never trains on) rises.
+
+## Step 3: download the data
+
+[`download_data.py`](scripts/download_data.py) downloaded the three datasets (1.76 GB on disk in total) and checked
+them; the job's progress was visible in the training monitor. **MRL Eye** has 84,898 infrared eye crops from 37
+people (41,946 closed, 42,952 open); every file name carries the person's ID, which Step 5 needs so that no person
+ends up in both training and test data. **CEW** has 4,846 eye patches (2,384 closed, 2,462 open) cut from normal
+camera photos, so they look like what a webcam sees rather than an infrared sensor. For **UTA-RLDD** we did not
+download the 111 GB of videos: a public Kaggle version (1.33 GB) already contains MediaPipe face features for all
+60 participants at 10 frames per second, 1,115,058 frames, with the authors' official 5-fold split; 168 of its
+178 videos pass that dataset's own quality check. It contains no images at all, so no driver's face can ever end up
+in this project ([`assets/data_overview.png`](assets/data_overview.png)).
+
+**Two honest trade-offs:** no Kaggle copy of CEW has the full face photos for both classes, only the 24x24 eye
+patches, so Step 5 decides how to align them with our live eye crops. And because the RLDD version has no images,
+`eyeTrack1` will use MediaPipe's own eye-blink scores instead of `eyeTrack0.5`'s output as its eye-closure signal.
+`scripts/clean_data.py` lists or deletes downloaded datasets once they are no longer needed.
