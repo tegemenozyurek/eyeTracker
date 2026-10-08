@@ -30,21 +30,21 @@ Read the emotionDetecter repo first and copy patterns from it rather than reinve
 
 ---
 
-## 2. The 3 models (naming mirrors emotionDetecter: eD → eT)
+## 2. The 3 models (named eyeTrack0.1, eyeTrack0.5, eyeTrack1)
 
 Plus one **non-ML reference baseline** (`rules`) that is not counted as a model.
 
 | version | what it is | trained on | the point it proves |
 |---|---|---|---|
 | `rules` | Eye Aspect Ratio (EAR) + PERCLOS + yawn (jawOpen) + head-pose thresholds | nothing | the classic baseline to beat |
-| `eT0.1` | small CNN, eye crop → open/closed | MRL Eye Dataset (infrared) | works in-domain, but measure the drop on RGB webcam-like eyes (domain gap) |
-| `eT0.5` | same CNN family + RGB data + MediaPipe-aligned eye crops + webcam augmentations | MRL Eye + CEW (RGB) | fixing the domain gap: cross-dataset accuracy and live-demo robustness |
-| `eTv1.0` | temporal model (GRU or 1D-CNN) over per-frame features → alert / low-vigilant / drowsy | UTA-RLDD (real drowsiness videos) | real drowsiness, not just "eyes closed" |
+| `eyeTrack0.1` | small CNN, eye crop → open/closed | MRL Eye Dataset (infrared) | works in-domain, but measure the drop on RGB webcam-like eyes (domain gap) |
+| `eyeTrack0.5` | same CNN family + RGB data + MediaPipe-aligned eye crops + webcam augmentations | MRL Eye + CEW (RGB) | fixing the domain gap: cross-dataset accuracy and live-demo robustness |
+| `eyeTrack1` | temporal model (GRU or 1D-CNN) over per-frame features → alert / low-vigilant / drowsy | UTA-RLDD (real drowsiness videos) | real drowsiness, not just "eyes closed" |
 
-**Per-frame features for `eTv1.0`:** left and right eye-closure probability from `eT0.5`, MediaPipe blendshapes
+**Per-frame features for `eyeTrack1`:** left and right eye-closure probability from `eyeTrack0.5`, MediaPipe blendshapes
 (eyeBlinkLeft/Right, jawOpen, and others if useful), head pose (pitch, yaw, roll from the facial
 transformation matrix), EAR, plus derived blink duration and blink rate. Use sliding windows (for example
-60 s at 5 fps). Compare `eTv1.0` against `rules` (PERCLOS thresholds) on the same windows.
+60 s at 5 fps). Compare `eyeTrack1` against `rules` (PERCLOS thresholds) on the same windows.
 
 **Important:** eye crops must be produced by **the exact same alignment and crop function** in training
 (Python) and live (JS), as emotionDetecter does for faces. Write a parity test.
@@ -55,9 +55,9 @@ transformation matrix), EAR, plus derived blink duration and blink rate. Use sli
 
 | dataset | use | notes |
 |---|---|---|
-| **MRL Eye Dataset** | `eT0.1`, `eT0.5` | Infrared eye crops, open/closed labels. Mirrors on Kaggle. Check the license and cite the original authors |
-| **CEW (Closed Eyes In The Wild)** | `eT0.5` | RGB eye patches, open/closed. Mirrors on Kaggle. Cite the original paper |
-| **UTA-RLDD** | `eTv1.0` | ~30 h, 60 participants, labels alert(0) / low vigilant(5) / drowsy(10). **111 GB in total**, so DO NOT download all of it. First check Kaggle mirrors (smaller, sometimes frame-extracted), otherwise download a subset of participants. Subsample to ~5 fps for feature extraction |
+| **MRL Eye Dataset** | `eyeTrack0.1`, `eyeTrack0.5` | Infrared eye crops, open/closed labels. Mirrors on Kaggle. Check the license and cite the original authors |
+| **CEW (Closed Eyes In The Wild)** | `eyeTrack0.5` | RGB eye patches, open/closed. Mirrors on Kaggle. Cite the original paper |
+| **UTA-RLDD** | `eyeTrack1` | ~30 h, 60 participants, labels alert(0) / low vigilant(5) / drowsy(10). **111 GB in total**, so DO NOT download all of it. First check Kaggle mirrors (smaller, sometimes frame-extracted), otherwise download a subset of participants. Subsample to ~5 fps for feature extraction |
 
 **UTA-RLDD rules (must follow):**
 - Cite: Ghoddoosian, Galib, Athitsos, *A Realistic Dataset and Baseline Temporal Model for Early Drowsiness Detection*, CVPR Workshops 2019 (arXiv:1904.07312).
@@ -75,7 +75,7 @@ A Kaggle token is already on this machine (`~/.kaggle`). Keep secrets out of the
 - Live panels: eye state per eye, blink counter and duration, **PERCLOS (rolling 60 s)**, yawn counter,
   head pose, "eyes off road" timer, and a driver state from the selected model.
 - Alert levels: OK / Attention / Take a break, with clear, non-flickering UI (reuse emotionDetecter's smoothing).
-- Model picker: `rules`, `eT0.1`, `eT0.5`, `eTv1.0`, with hover cards explaining what changed (as in emotionDetecter).
+- Model picker: `rules`, `eyeTrack0.1`, `eyeTrack0.5`, `eyeTrack1`, with hover cards explaining what changed (as in emotionDetecter).
 - Debug toggle: show the aligned eye crops that the model receives.
 - Privacy line: video never leaves the device.
 - Deploy to GitHub Pages and link it at the top of the README.
@@ -84,9 +84,9 @@ A Kaggle token is already on this machine (`~/.kaggle`). Keep secrets out of the
 
 ## 5. Evaluation (what goes in the README results table)
 
-- `eT0.1` vs `eT0.5`: accuracy and F1 on MRL test, CEW test, and a **simulated webcam** version of both
+- `eyeTrack0.1` vs `eyeTrack0.5`: accuracy and F1 on MRL test, CEW test, and a **simulated webcam** version of both
   (same degradation pipeline as emotionDetecter). Confusion matrices.
-- `rules` vs `eTv1.0`: accuracy, macro-F1, per-class recall on held-out RLDD subjects (3-class), plus
+- `rules` vs `eyeTrack1`: accuracy, macro-F1, per-class recall on held-out RLDD subjects (3-class), plus
   binary alert-vs-drowsy. Report window length and fps.
 - Training time per model on the M4 (MPS), parameter count, browser inference time per frame.
 - Honest limitations: self-reported RLDD labels, IR vs RGB gap, glasses and sunglasses, night driving, no real-car test.
@@ -102,18 +102,18 @@ A Kaggle token is already on this machine (`~/.kaggle`). Keep secrets out of the
 4. Explore data: class balance, sample grid, subject counts.
 5. Preprocess: eye crops, **subject-wise splits** (MRL has subject IDs, so no person in both train and test).
 6. Define the CNN and print its summary.
-7. Train `eT0.1` (watched live in the monitor); evaluate on MRL test, CEW test and simulated webcam.
+7. Train `eyeTrack0.1` (watched live in the monitor); evaluate on MRL test, CEW test and simulated webcam.
 8. Web demo v0 with the `rules` baseline (EAR, PERCLOS, yawn, head pose) working live.
 
 **Day 2: second model + temporal features**
 9. Eye alignment/crop function in JS identical to Python, with a parity test.
-10. Train `eT0.5` (MRL + CEW, aligned crops, webcam augmentations); benchmark against `eT0.1`.
+10. Train `eyeTrack0.5` (MRL + CEW, aligned crops, webcam augmentations); benchmark against `eyeTrack0.1`.
 11. Export to ONNX, verify against PyTorch, plug into the web demo.
 12. RLDD feature extraction at ~5 fps (progress visible in the monitor): per-frame features → windows → subject-wise folds.
 
 **Day 3: third model + polish**
-13. Train `eTv1.0` (GRU or 1D-CNN); evaluate against `rules` on held-out subjects.
-14. Export `eTv1.0` to ONNX and add the driver-state panel to the demo.
+13. Train `eyeTrack1` (GRU or 1D-CNN); evaluate against `rules` on held-out subjects.
+14. Export `eyeTrack1` to ONNX and add the driver-state panel to the demo.
 15. Benchmark script, charts for all models, showcase image.
 16. README (emotionDetecter style), GitHub Pages live, final cleanup and final report.
 
@@ -124,7 +124,7 @@ A Kaggle token is already on this machine (`~/.kaggle`). Keep secrets out of the
 
 ## 7. Working style
 
-- **Commit after each step** with messages like `Step 4: train eT0.1 (xx.x% test)`, as in emotionDetecter.
+- **Commit after each step** with messages like `Step 4: train eyeTrack0.1 (xx.x% test)`, as in emotionDetecter.
 - Every script prints its key numbers and saves a chart in `assets/`.
 - File and folder names in **English**.
 - **Explain as you go:** after each step, write 3–5 plain-language sentences in `NOTES.md` (what was done,
@@ -149,7 +149,7 @@ A local dashboard to watch training and long jobs live, started with **one comma
   - per-class precision/recall and a **confusion matrix** refreshed at each epoch end
   - **sample predictions** (eye crops with true vs predicted label, misclassified ones highlighted).
     For RLDD, never show faces: plot feature curves only.
-  - **run comparison**: overlay curves of `eT0.1`, `eT0.5`, `eTv1.0`
+  - **run comparison**: overlay curves of `eyeTrack0.1`, `eyeTrack0.5`, `eyeTrack1`
   - **progress bars** for long non-training jobs (dataset download, RLDD feature extraction)
   - a **Stop training** button (writes a stop file; the trainer saves the best checkpoint and exits cleanly)
 - Keep it simple and robust (Streamlit, or a small Python server + one HTML page). It must not slow training down.
