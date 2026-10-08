@@ -1,97 +1,62 @@
-# 👁️ eyeTracker
+# Step 8: web demo with the rules baseline
 
-[![Python](https://img.shields.io/badge/python-3.12-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![PyTorch](https://img.shields.io/badge/PyTorch-2.x-EE4C2C?logo=pytorch&logoColor=white)](https://pytorch.org/)
-[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+> This branch is one step of **[eyeTracker](https://github.com/tegemenozyurek/eyeTracker)**, a real-time driver
+> monitoring system that runs in the browser. Every step of the project has its own branch, and its README explains
+> what was done in that step. The project overview is the README on [`main`](https://github.com/tegemenozyurek/eyeTracker).
+>
+> Previous: [Step 7: train eyeTrack0.1](https://github.com/tegemenozyurek/eyeTracker/tree/step-07-train-eyetrack01) ·
+> Next: Step 9: one eye-crop function in Python and JavaScript
 
-**Real-time driver monitoring in the browser.** A normal webcam watches the driver's eyes, mouth and head and
-detects **drowsiness** (eye closure, PERCLOS, slow blinks, yawning, head nodding) and **distraction**
-(looking away from the road), with three alert levels: OK, Attention, Take a break.
+## What was done
 
-> **Work in progress.** Built step by step following [BRIEF.md](BRIEF.md). Plain-language notes for every
-> step are in [NOTES.md](NOTES.md). Results, the live demo link and charts will appear here as they are produced.
+The first live demo, in [`web/`](web/). It runs entirely in the browser; no frame leaves the device.
 
-## Planned models
+- **Face tracking:** MediaPipe Face Landmarker (tasks-vision) gives, for every webcam frame, 478 face points, 52
+  expression scores (blendshapes such as `eyeBlinkLeft`, `jawOpen`) and the head's 4x4 transformation matrix, from which
+  pitch, yaw and roll are computed.
+- **The `rules` baseline** ([`web/rules.js`](web/rules.js), no learning, no DOM, so it is testable in Node):
 
-| version | what it is | trained on |
-|---|---|---|
-| `rules` | reference baseline, no learning: eye aspect ratio, PERCLOS, yawn and head-pose thresholds | nothing |
-| `eyeTrack0.1` | small CNN, eye crop → open / closed | MRL Eye Dataset (infrared) |
-| `eyeTrack0.5` | same CNN family + eyes from normal cameras, MediaPipe-aligned crops, webcam augmentations | MRL Eye + CEW |
-| `eyeTrack1` | temporal model over per-frame features → alert / low vigilant / drowsy | UTA-RLDD (MediaPipe features, no video) |
+  | signal | rule (provisional thresholds) |
+  |---|---|
+  | eye closed | MediaPipe eyeBlink score ≥ 0.5 (the definition used in the RLDD features) |
+  | PERCLOS | share of time with closed eyes over the last 60 s, judged after 20 s: Attention ≥ 7.5%, Take a break ≥ 15% |
+  | microsleep | one closure ≥ 1.5 s: Take a break at once |
+  | yawns | jawOpen > 0.5 for ≥ 1.5 s; 3 yawns in 5 minutes: Attention |
+  | eyes off the road | head > 25° to the side or > 20° down from the direction calibrated in the first 3 s, or face out of view: Attention after 2 s, Take a break after 4 s |
+  | head nods | pitch drops > 12° below its 30 s median and comes back within 2 s (counted, shown) |
+  | no flicker | a level steps down only after it has been gone for 4 s |
 
-## Results so far
+- **Live panels:** driver state, each eye (open/closed, EAR, closure score), blinks (count, per minute, last duration),
+  PERCLOS with its thresholds, yawns and nods, head pose relative to the road, eyes-off-road timer, a 60 s eye-closure
+  curve, an alert banner and an optional beep.
+- **Model picker** with hover cards: `rules` now; `eyeTrack0.1`, `eyeTrack0.5` and `eyeTrack1` arrive in Steps 11 and 14.
+- **Debug view** of the 32x32 eye crops a model would see (simple box crops; Step 9 replaces them with the aligned crop
+  shared with training), and a **video-file input** for testing without a camera.
 
-| model | MRL test (infrared) | CEW test (normal camera) | simulated webcam, MRL / CEW | training time |
-|---|---:|---:|---:|---:|
-| `eyeTrack0.1` | 97.8% | 89.3% | 60.6% / 56.3% | 7.8 min |
+## Why
 
-Test people never appear in training. Full report: [`models/eyeTrack0.1/test_report.txt`](models/eyeTrack0.1/test_report.txt).
+The `rules` baseline is the classic approach the learned models must beat, and the demo is where every model will be
+judged by eye. Building it before the models also fixes the per-frame signals that `eyeTrack1` will learn from.
 
-## How it was built, step by step
+## Results
 
-Every step has its own branch whose README explains what was done in that step, why, and its results.
-Each branch is merged into `main` and kept.
+- **10 of 10 rule tests pass** (`node web/rules.test.mjs`): normal blinking stays OK (PERCLOS 5%), a 2 s closure gives
+  Take a break at once, high PERCLOS gives Take a break, PERCLOS waits for 20 s of data, looking 40° away gives
+  Attention after 2 s and Take a break after 4 s, a face out of view counts as off the road, a camera mounted 30° to the
+  side is not distraction after calibration, three yawns give Attention, a nod is counted, and an alert does not flicker.
+  One test caught a wrong expectation of mine: after a 2 s closure the alert falls back to Attention, not OK, because
+  those 2 seconds raise the last minute's PERCLOS above 7.5%.
+- **Browser check** on a test video of eight face photos (in the in-app browser on the M4): faces found, eyes reported
+  open or closed with their EAR, head pose filled in, about 17 frames per second with 14.9 ms of face tracking per
+  frame. A live webcam test is still to be done by a person in front of the camera.
 
-| step | branch |
-|---|---|
-| 1. Project skeleton, environment check | [`step-01-project-skeleton`](https://github.com/tegemenozyurek/eyeTracker/tree/step-01-project-skeleton) |
-| 2. Training monitor | [`step-02-training-monitor`](https://github.com/tegemenozyurek/eyeTracker/tree/step-02-training-monitor) |
-| 3. Download the data (1.76 GB) | [`step-03-download-data`](https://github.com/tegemenozyurek/eyeTracker/tree/step-03-download-data) |
-| 4. Explore the data: person and camera biases, drowsiness signal strength | [`step-04-explore-data`](https://github.com/tegemenozyurek/eyeTracker/tree/step-04-explore-data) |
-| 5. 32x32 eye crops, subject-wise splits (no person in two splits) | [`step-05-eye-crops-splits`](https://github.com/tegemenozyurek/eyeTracker/tree/step-05-eye-crops-splits) |
-| 6. Eye CNN: 295,266 parameters, 0.75 ms for both eyes on CPU | [`step-06-define-cnn`](https://github.com/tegemenozyurek/eyeTracker/tree/step-06-define-cnn) |
-| 7. Train `eyeTrack0.1`: 97.8% MRL test, 89.3% CEW test, 60.6% simulated webcam | [`step-07-train-eyetrack01`](https://github.com/tegemenozyurek/eyeTracker/tree/step-07-train-eyetrack01) |
-
-## Project layout
-
-```
-src/               shared code: models, eye alignment, augmentation, features
-scripts/           one script per step; each prints its results and saves a chart
-tools/monitor/     live dashboard for training runs and long jobs
-models/<version>/  weights, config, training log, test report
-assets/<version>/  charts
-web/               browser demo
-data/              datasets (git-ignored, downloaded by scripts)
-runs/<version>/    live metrics read by the monitor (git-ignored)
-```
-
-## Setup
+## Try it
 
 ```bash
-python3.12 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-python scripts/check_env.py
+git checkout step-08-web-demo-rules
+python3 -m http.server -d web 8010     # then open http://localhost:8010 and press Start camera
+node web/rules.test.mjs                # the rule tests
 ```
 
-### Get the data
-
-```bash
-python scripts/download_data.py     # MRL Eye, CEW, UTA-RLDD features: 1.76 GB, needs a Kaggle token
-python scripts/clean_data.py        # disk use per dataset; delete the ones you no longer need
-```
-
-### Watch training live
-
-```bash
-python tools/monitor/app.py        # opens http://127.0.0.1:8501
-```
-
-Every training run and long job writes its progress to `runs/<name>/metrics.jsonl`; the monitor shows live loss and
-accuracy curves, ETA, an overfitting warning, per-class precision/recall, the confusion matrix, sample predictions,
-progress bars for long jobs, a run comparison and a Stop button. Try it without any data:
-`python tools/monitor/dummy_run.py`.
-
-## Data
-
-| dataset | used by | what it is |
-|---|---|---|
-| [MRL Eye](http://mrl.cs.vsb.cz/eyedataset) | `eyeTrack0.1`, `eyeTrack0.5` | 84,898 infrared eye crops from 37 people, open / closed |
-| [CEW](https://parnec.nuaa.edu.cn/_upload/tpl/02/db/731/template731/pages/xtan/ClosedEyeDatabases.html) | `eyeTrack0.5` | 4,846 eye patches from normal-camera photos, open / closed |
-| [UTA-RLDD](https://sites.google.com/view/utarldd/home) | `eyeTrack1` | 60 drivers, alert / low vigilant / drowsy; used as MediaPipe features (1,115,058 frames, no images) from [UTA-RLDD Face Features](https://www.kaggle.com/datasets/abdulrahmankhengari/uta-rldd-face-features) |
-
-No face from UTA-RLDD is ever shown in this project: the version used here contains numbers only.
-
-## License
-
-Code is released under the [MIT License](LICENSE). Datasets belong to their creators and are not redistributed here.
+Look at the screen for 3 seconds (calibration), then try: close your eyes for 2 s, look to the side for 4 s, yawn
+three times.
