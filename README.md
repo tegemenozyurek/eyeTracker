@@ -1,88 +1,66 @@
-# 👁️ eyeTracker
+# Step 7: train eyeTrack0.1
 
-[![Python](https://img.shields.io/badge/python-3.12-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![PyTorch](https://img.shields.io/badge/PyTorch-2.x-EE4C2C?logo=pytorch&logoColor=white)](https://pytorch.org/)
-[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+> This branch is one step of **[eyeTracker](https://github.com/tegemenozyurek/eyeTracker)**, a real-time driver
+> monitoring system that runs in the browser. Every step of the project has its own branch, and its README explains
+> what was done in that step. The project overview is the README on [`main`](https://github.com/tegemenozyurek/eyeTracker).
+>
+> Previous: [Step 6: define the CNN](https://github.com/tegemenozyurek/eyeTracker/tree/step-06-define-cnn) ·
+> Next: [Step 8: web demo with the rules baseline](https://github.com/tegemenozyurek/eyeTracker/tree/step-08-web-demo-rules)
 
-**Real-time driver monitoring in the browser.** A normal webcam watches the driver's eyes, mouth and head and
-detects **drowsiness** (eye closure, PERCLOS, slow blinks, yawning, head nodding) and **distraction**
-(looking away from the road), with three alert levels: OK, Attention, Take a break.
+## What was done
 
-> **Work in progress.** Built step by step following [BRIEF.md](BRIEF.md). Plain-language notes for every
-> step are in [NOTES.md](NOTES.md). Results, the live demo link and charts will appear here as they are produced.
+- **[`scripts/train.py`](scripts/train.py)** trains the eye CNN on the 32x32 crops from Step 5, logging every step and
+  epoch to the [training monitor](https://github.com/tegemenozyurek/eyeTracker/tree/step-02-training-monitor) (curves,
+  confusion matrix, sample predictions, Stop button). AdamW, one warm-up epoch, cosine learning-rate decay; the epoch
+  with the best validation accuracy is kept.
+- **`eyeTrack0.1`**: trained on the infrared eyes of the 25 MRL training people only, no augmentation: the baseline.
+- **[`scripts/evaluate.py`](scripts/evaluate.py)** tests on people the model has never seen: MRL test (infrared),
+  CEW test (normal camera), both under a **simulated webcam** ([`src/webcam.py`](src/webcam.py): dim light, motion blur,
+  low resolution, sensor noise, detector jitter, alone and combined), and MRL per camera, lighting, glasses and
+  reflections.
 
-## Planned models
+## Why
 
-| version | what it is | trained on |
-|---|---|---|
-| `rules` | reference baseline, no learning: eye aspect ratio, PERCLOS, yawn and head-pose thresholds | nothing |
-| `eyeTrack0.1` | small CNN, eye crop → open / closed | MRL Eye Dataset (infrared) |
-| `eyeTrack0.5` | same CNN family + eyes from normal cameras, MediaPipe-aligned crops, webcam augmentations | MRL Eye + CEW |
-| `eyeTrack1` | temporal model over per-frame features → alert / low vigilant / drowsy | UTA-RLDD (MediaPipe features, no video) |
+`eyeTrack0.1` shows what a model trained only on infrared eyes can and cannot do. Its drop on normal-camera and
+webcam-like eyes is the problem `eyeTrack0.5` has to solve.
 
-## How it was built, step by step
+## Results
 
-Every step has its own branch whose README explains what was done in that step, why, and its results.
-Each branch is merged into `main` and kept.
+From `python scripts/train.py --name eyeTrack0.1` and `python scripts/evaluate.py --model eyeTrack0.1`
+([full report](models/eyeTrack0.1/test_report.txt)):
 
-| step | branch |
+| | |
 |---|---|
-| 1. Project skeleton, environment check | [`step-01-project-skeleton`](https://github.com/tegemenozyurek/eyeTracker/tree/step-01-project-skeleton) |
-| 2. Training monitor | [`step-02-training-monitor`](https://github.com/tegemenozyurek/eyeTracker/tree/step-02-training-monitor) |
-| 3. Download the data (1.76 GB) | [`step-03-download-data`](https://github.com/tegemenozyurek/eyeTracker/tree/step-03-download-data) |
-| 4. Explore the data: person and camera biases, drowsiness signal strength | [`step-04-explore-data`](https://github.com/tegemenozyurek/eyeTracker/tree/step-04-explore-data) |
-| 5. 32x32 eye crops, subject-wise splits (no person in two splits) | [`step-05-eye-crops-splits`](https://github.com/tegemenozyurek/eyeTracker/tree/step-05-eye-crops-splits) |
-| 6. Eye CNN: 295,266 parameters, 0.75 ms for both eyes on CPU | [`step-06-define-cnn`](https://github.com/tegemenozyurek/eyeTracker/tree/step-06-define-cnn) |
+| training | 30 epochs, 7.8 min on the M4 GPU (MPS); best validation accuracy 99.0% at epoch 25 |
+| **MRL test** (7 unseen people, infrared) | **97.8%** accuracy, macro F1 97.8% |
+| **CEW test** (normal camera) | **89.3%** accuracy, macro F1 89.2%; closed eyes caught 84.3% |
+| simulated webcam, all effects combined | **60.6%** MRL, **56.3%** CEW (guessing = 50%) |
 
-## Project layout
+![Training curves](assets/eyeTrack0.1/training_curves.png)
 
-```
-src/               shared code: models, eye alignment, augmentation, features
-scripts/           one script per step; each prints its results and saves a chart
-tools/monitor/     live dashboard for training runs and long jobs
-models/<version>/  weights, config, training log, test report
-assets/<version>/  charts
-web/               browser demo
-data/              datasets (git-ignored, downloaded by scripts)
-runs/<version>/    live metrics read by the monitor (git-ignored)
-```
+Validation accuracy levels off at about 99.0% while validation loss rises from 0.0320 (epoch 10) to 0.0487 (epoch 30):
+**mild overfitting**. The model grows more confident on its training eyes without getting more correct on new people.
 
-## Setup
+![Simulated webcam](assets/eyeTrack0.1/webcam_conditions.png)
 
-```bash
-python3.12 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-python scripts/check_env.py
-```
+**The domain gap:** sensor noise alone drops MRL from 97.8% to 67.2%, and all effects together leave the model close to
+guessing. Excellent on infrared eyes, nearly useless on a webcam.
 
-### Get the data
+![Confusion matrices](assets/eyeTrack0.1/confusion_matrices.png)
+![CEW predictions](assets/eyeTrack0.1/predictions.png)
+
+**No camera shortcut.** Step 4 found that eye state is tied to the camera in MRL. Accuracy alone could hide a model that
+just says "open" on mostly-open cameras, so the report also counts the closed eyes caught: 98.2% (RealSense),
+98.5% (IDS, 130 closed eyes) and 100% (Aptina, a camera it never trained on, 73 closed eyes). Small samples for the
+last two, but no sign of cheating.
+
+## Try it
 
 ```bash
-python scripts/download_data.py     # MRL Eye, CEW, UTA-RLDD features: 1.76 GB, needs a Kaggle token
-python scripts/clean_data.py        # disk use per dataset; delete the ones you no longer need
+git checkout step-07-train-eyetrack01
+python tools/monitor/app.py                          # watch it live (optional)
+python scripts/train.py --name eyeTrack0.1           # about 8 minutes on an M4
+python scripts/evaluate.py --model eyeTrack0.1
 ```
 
-### Watch training live
-
-```bash
-python tools/monitor/app.py        # opens http://127.0.0.1:8501
-```
-
-Every training run and long job writes its progress to `runs/<name>/metrics.jsonl`; the monitor shows live loss and
-accuracy curves, ETA, an overfitting warning, per-class precision/recall, the confusion matrix, sample predictions,
-progress bars for long jobs, a run comparison and a Stop button. Try it without any data:
-`python tools/monitor/dummy_run.py`.
-
-## Data
-
-| dataset | used by | what it is |
-|---|---|---|
-| [MRL Eye](http://mrl.cs.vsb.cz/eyedataset) | `eyeTrack0.1`, `eyeTrack0.5` | 84,898 infrared eye crops from 37 people, open / closed |
-| [CEW](https://parnec.nuaa.edu.cn/_upload/tpl/02/db/731/template731/pages/xtan/ClosedEyeDatabases.html) | `eyeTrack0.5` | 4,846 eye patches from normal-camera photos, open / closed |
-| [UTA-RLDD](https://sites.google.com/view/utarldd/home) | `eyeTrack1` | 60 drivers, alert / low vigilant / drowsy; used as MediaPipe features (1,115,058 frames, no images) from [UTA-RLDD Face Features](https://www.kaggle.com/datasets/abdulrahmankhengari/uta-rldd-face-features) |
-
-No face from UTA-RLDD is ever shown in this project: the version used here contains numbers only.
-
-## License
-
-Code is released under the [MIT License](LICENSE). Datasets belong to their creators and are not redistributed here.
+The trained weights are included: `models/eyeTrack0.1/model.pt` (1.2 MB).
