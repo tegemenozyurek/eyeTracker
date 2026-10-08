@@ -79,8 +79,8 @@ means open" instead of looking at the eyelid, which is exactly the kind of thing
 the eyes closed) is 2.2% for alert, 4.7% for low vigilant and 9.8% for drowsy drivers, and within the same person the
 drowsy video has the higher PERCLOS for 42 of 53 people. But the dots of the three classes overlap heavily between
 people, low vigilant sits close to alert, and yawning is rare in every class (median 0). Person 01, the first ID
-and not a hand-picked example, does not close the eyes more when drowsy, but holds the head about 5 to 10 degrees
-lower the whole time. Two consequences: features should be compared with the same driver's own normal values, and
+and not a hand-picked example, does not close the eyes more when drowsy (mean eye-closure score 0.220 vs 0.248
+when alert), but holds the head lower the whole time (mean pitch -7.9 vs +0.4 degrees). Two consequences: features should be compared with the same driver's own normal values, and
 the 3-class task will be much harder than alert vs drowsy.
 
 **PERCLOS, in one sentence:** the percentage of time the eyes are (almost) closed over a time window, the most

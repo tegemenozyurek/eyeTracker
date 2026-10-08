@@ -259,6 +259,10 @@ def rldd_timeline(videos):
     fig.savefig(OUT / "rldd_timeline.png", dpi=150)
     plt.close(fig)
     print(f"\n  timeline chart: person {subject}")
+    for cls in ("alert", "drowsy"):
+        d = good[(subject, cls)]["data"]
+        blink = (d["bs_eyeBlinkLeft"] + d["bs_eyeBlinkRight"]) / 2
+        print(f"    {cls:<7} video: mean eye-closure score {np.nanmean(blink):.3f}, mean head pitch {np.nanmean(d['pitch']):+.1f} degrees")
 
 
 def main():
