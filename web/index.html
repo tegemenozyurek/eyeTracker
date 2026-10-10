@@ -2,110 +2,147 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>eyeTracker · live</title>
 <meta name="description" content="Real-time driver monitoring (drowsiness and distraction) that runs entirely in your browser. Video never leaves your device.">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='34' fill='none' stroke='%23161616' stroke-width='12'/><circle cx='50' cy='50' r='12' fill='%23ff5a1f'/></svg>">
-<link rel="stylesheet" href="style.css?v=4">
+<meta name="theme-color" content="#0b0c0e" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#eef0f2" media="(prefers-color-scheme: light)">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><path d='M8 50C22 26 36 18 50 18s28 8 42 32C78 74 64 82 50 82S22 74 8 50z' fill='none' stroke='%2312b76a' stroke-width='9'/><circle cx='50' cy='50' r='13' fill='%2312b76a'/></svg>">
+<link rel="stylesheet" href="style.css?v=6">
 </head>
 <body>
-<header class="top">
-  <div class="brand">
-    <h1>eye<span>.</span>Tracker</h1>
-    <p>Driver drowsiness and distraction monitoring · runs entirely in your browser</p>
-  </div>
+<header class="bar">
+  <a class="logo" href="https://github.com/tegemenozyurek/eyeTracker" target="_blank" rel="noopener" aria-label="eyeTracker on GitHub">
+    <svg viewBox="0 0 100 100" aria-hidden="true"><path d="M8 50C22 26 36 18 50 18s28 8 42 32C78 74 64 82 50 82S22 74 8 50z"/><circle cx="50" cy="50" r="13"/></svg>
+    <span class="logo-text"><b>eyeTracker</b><small>driver monitoring</small></span>
+  </a>
+  <nav class="seg" id="models" role="radiogroup" aria-label="Model"></nav>
   <a class="gh" href="https://github.com/tegemenozyurek/eyeTracker" target="_blank" rel="noopener">GitHub ↗</a>
 </header>
 
-<main class="layout">
-  <section class="stage card">
-    <div class="toolbar">
-      <div class="models" id="models" role="radiogroup" aria-label="Model"></div>
-      <span class="stats" id="stats">loading…</span>
-    </div>
-
+<main class="app" id="app" data-level="none">
+  <section class="stage">
+    <div class="screen">
     <div class="viewport" id="viewport">
       <video id="video" playsinline muted></video>
       <canvas id="overlay"></canvas>
-      <div class="banner" id="banner" hidden></div>
+
+      <div class="hud">
+        <span class="stats" id="stats">loading…</span>
+        <div class="banner" id="banner" hidden></div>
+      </div>
+
       <div class="empty" id="empty">
-        <div class="empty-icon">🚗</div>
-        <p>Turn on your camera and look at the screen as if it were the road.</p>
+        <svg class="empty-icon" viewBox="0 0 64 64" aria-hidden="true"><path d="M6 32C14 19 22 14 32 14s18 5 26 18c-8 13-16 18-26 18S14 45 6 32z"/><circle cx="32" cy="32" r="8"/></svg>
+        <p class="empty-title">Look at the screen as if it were the road</p>
         <p class="muted">The first 3 seconds set where "the road" is. Video never leaves this device.</p>
       </div>
     </div>
 
-    <div class="controls">
-      <button id="camera" class="btn primary" disabled>Start camera</button>
-      <label class="btn" for="file">Use a video file</label>
-      <input type="file" id="file" accept="video/*" hidden>
-      <button id="recalibrate" class="btn" disabled>Recalibrate</button>
-      <button id="flash" class="btn" aria-pressed="false" title="Turn the screen into a white light around the image (F)">☀ Flash</button>
-      <span class="spacer"></span>
-      <label class="switch"><input type="checkbox" id="sound"><span></span>Sound</label>
+      <div class="dock">
+        <button id="camera" class="btn primary" disabled>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h11v10H4zM15 10l5-3v10l-5-3"/></svg><span>Start camera</span>
+        </button>
+        <label class="btn" for="file">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h9l5 5v11H5zM14 4v5h5"/></svg><span>Video file</span>
+        </label>
+        <input type="file" id="file" accept="video/*" hidden>
+        <button id="recalibrate" class="btn" disabled title="Look at the road, then press: sets the straight-ahead direction">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg><span>Recalibrate</span>
+        </button>
+        <button id="flash" class="btn" aria-pressed="false" title="Light your face with the screen (F)">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2"/></svg><span>Flash</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="toggles">
       <label class="switch"><input type="checkbox" id="mesh" checked><span></span>Landmarks</label>
       <label class="switch"><input type="checkbox" id="showCrops"><span></span>Model input</label>
+      <label class="switch"><input type="checkbox" id="sound"><span></span>Sound</label>
+      <span class="privacy">● Processed on this device only</span>
     </div>
   </section>
 
-  <aside class="panel card">
-    <div class="state" id="state" data-level="none">
+  <aside class="cluster">
+    <div class="card state" id="state" data-level="none">
+      <span class="k">Driver state</span>
       <div class="state-label" id="stateLabel">No driver yet</div>
       <div class="state-sub" id="stateSub">Start the camera</div>
     </div>
 
-    <div class="tiles">
-      <div class="tile"><span class="k">Left eye</span><b id="eyeL">–</b><i class="meter"><span id="eyeLBar"></span></i></div>
-      <div class="tile"><span class="k">Right eye</span><b id="eyeR">–</b><i class="meter"><span id="eyeRBar"></span></i></div>
-      <div class="tile"><span class="k">Blinks</span><b id="blinks">–</b><span class="v" id="blinkInfo"></span></div>
-      <div class="tile"><span class="k">Yawns (5 min)</span><b id="yawns">–</b><span class="v" id="yawnInfo"></span></div>
-      <div class="tile wide">
-        <span class="k">PERCLOS · eyes closed, last 60 s</span><b id="perclos">–</b>
-        <i class="meter perclos"><span id="perclosBar"></span><em class="mark a"></em><em class="mark b"></em></i>
-        <span class="v" id="perclosInfo"></span>
-      </div>
-      <div class="tile wide">
-        <span class="k">Head pose · pitch / yaw / roll</span><b id="pose">–</b><span class="v" id="poseInfo"></span>
-      </div>
-      <div class="tile wide">
-        <span class="k">Eyes off the road</span><b id="offroad">–</b><span class="v" id="offroadInfo"></span>
-      </div>
+    <figure class="card gauge">
+      <span class="k">PERCLOS · 60 s</span>
+      <svg viewBox="0 0 120 70" aria-hidden="true">
+        <path class="track" d="M10 62a50 50 0 0 1 100 0" pathLength="100"/>
+        <path class="fill" id="perclosArc" d="M10 62a50 50 0 0 1 100 0" pathLength="100"/>
+        <path class="tick a" d="M10 62a50 50 0 0 1 100 0" pathLength="100"/>
+        <path class="tick b" d="M10 62a50 50 0 0 1 100 0" pathLength="100"/>
+      </svg>
+      <b class="gauge-value" id="perclos">–</b>
+      <figcaption class="v" id="perclosInfo"></figcaption>
+    </figure>
+
+    <figure class="card gauge">
+      <span class="k">Eyes off the road</span>
+      <svg viewBox="0 0 120 70" aria-hidden="true">
+        <path class="track" d="M10 62a50 50 0 0 1 100 0" pathLength="100"/>
+        <path class="fill" id="offroadArc" d="M10 62a50 50 0 0 1 100 0" pathLength="100"/>
+        <path class="tick c" d="M10 62a50 50 0 0 1 100 0" pathLength="100"/>
+        <path class="tick d" d="M10 62a50 50 0 0 1 100 0" pathLength="100"/>
+      </svg>
+      <b class="gauge-value" id="offroad">–</b>
+      <figcaption class="v" id="offroadInfo"></figcaption>
+    </figure>
+
+    <div class="card eyes">
+      <span class="k">Eyes · closure</span>
+      <div class="eye-row"><span class="eye-name">Right</span><i class="meter"><span id="eyeRBar"></span></i><b id="eyeR">–</b></div>
+      <div class="eye-row"><span class="eye-name">Left</span><i class="meter"><span id="eyeLBar"></span></i><b id="eyeL">–</b></div>
     </div>
 
-    <div class="temporal" id="temporal" hidden>
-      <div class="k">Driver state from eyeTrack1 · <span id="temporalInfo"></span></div>
+    <div class="card counters">
+      <div><span class="k">Blinks</span><b id="blinks">–</b><span class="v" id="blinkInfo"></span></div>
+      <div><span class="k">Yawns · 5 min</span><b id="yawns">–</b><span class="v" id="yawnInfo"></span></div>
+    </div>
+
+    <div class="card pose">
+      <span class="k">Head pose · pitch / yaw / roll</span><b id="pose">–</b><span class="v" id="poseInfo"></span>
+    </div>
+
+    <div class="card temporal" id="temporal" hidden>
+      <span class="k">eyeTrack1 · <span id="temporalInfo"></span></span>
       <div id="temporalBars"></div>
     </div>
 
-    <div class="spark"><div class="k">Eye closure, last 60 s</div><canvas id="spark" height="60"></canvas></div>
+    <div class="card spark"><span class="k">Eye closure · last 60 s</span><canvas id="spark" height="56"></canvas></div>
 
-    <div class="crops" id="crops" hidden>
-      <div class="k">What a model would see (32x32 eye crops)</div>
+    <div class="card crops" id="crops" hidden>
+      <span class="k">Model input · 32×32 aligned eyes</span>
       <div class="crops-row"><canvas id="cropR" width="32" height="32"></canvas><canvas id="cropL" width="32" height="32"></canvas></div>
-      <div class="note">Right and left eye, aligned on the eye corners exactly as in training (Step 9).</div>
+      <div class="note">Right and left eye, cut exactly as in training.</div>
     </div>
   </aside>
 </main>
 
 <section class="about">
   <details class="fold">
-  <summary><span>How it works</span><span class="chev" aria-hidden="true">›</span></summary>
-  <ol class="pipeline">
-    <li><b>Track</b><span>MediaPipe finds 478 face points, 52 expression scores and the head's rotation in every frame</span></li>
-    <li><b>Measure</b><span>eye closure, blinks, PERCLOS over 60 s, yawns, head pose, time with the eyes off the road</span></li>
-    <li><b>Decide</b><span>the selected model turns these into OK, Attention or Take a break</span></li>
-    <li><b>Hold</b><span>an alert steps down only after it has been gone for a few seconds, so it does not flicker</span></li>
-  </ol>
+    <summary><span>How it works</span><span class="chev" aria-hidden="true">›</span></summary>
+    <ol class="pipeline">
+      <li><b>Track</b><span>MediaPipe finds 478 face points, 52 expression scores and the head's rotation in every frame</span></li>
+      <li><b>Measure</b><span>eye closure, blinks, PERCLOS over 60 s, yawns, head pose, time with the eyes off the road</span></li>
+      <li><b>Decide</b><span>the selected model turns these into OK, Attention or Take a break</span></li>
+      <li><b>Hold</b><span>an alert steps down only after it has been gone for a few seconds, so it does not flicker</span></li>
+    </ol>
   </details>
+  <footer>
+    A learning project, not a safety system: never rely on it while driving.
+    The camera feed is processed only on this device; no image or video is uploaded or stored.
+  </footer>
 </section>
-
-<footer>
-  A learning project, not a safety system: never rely on it while driving.
-  <p class="note">The camera feed is processed only on this device. No image or video is uploaded or stored.</p>
-</footer>
 
 <div class="flash-frame" id="flashFrame" hidden></div>
 
-<script type="module" src="app.js?v=5"></script>
+<script type="module" src="app.js?v=7"></script>
 </body>
 </html>

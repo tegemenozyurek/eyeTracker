@@ -28,8 +28,8 @@ const COMING = [];
 const $ = (id) => document.getElementById(id);
 const ui = Object.fromEntries(["video", "overlay", "viewport", "empty", "banner", "camera", "file", "recalibrate", "sound",
   "mesh", "showCrops", "stats", "models", "state", "stateLabel", "stateSub", "eyeL", "eyeR", "eyeLBar", "eyeRBar",
-  "blinks", "blinkInfo", "yawns", "yawnInfo", "perclos", "perclosBar", "perclosInfo", "pose", "poseInfo", "offroad",
-  "offroadInfo", "spark", "crops", "cropL", "cropR", "temporal", "temporalInfo", "temporalBars"].map((id) => [id, $(id)]));
+  "blinks", "blinkInfo", "yawns", "yawnInfo", "perclos", "perclosArc", "perclosInfo", "pose", "poseInfo", "offroad",
+  "offroadArc", "offroadInfo", "spark", "crops", "cropL", "cropR", "temporal", "temporalInfo", "temporalBars", "app"].map((id) => [id, $(id)]));
 
 const state = { landmarker: null, rules: new DriverRules(), source: null, stream: null, loopId: 0, mirrored: true,
   fps: 0, lastFrame: 0, detectMs: 0, history: [], lastLevel: 0, model: "rules", eyeModel: null, inferMs: 0, models: [],
@@ -187,6 +187,7 @@ const pct = (x, d = 0) => `${(x * 100).toFixed(d)}%`;
 
 function render(f, s) {
   ui.state.dataset.level = String(s.level);
+  ui.app.dataset.level = s.face || s.calibrated ? String(s.level) : "none";  // colours the frame around the video
   ui.stateLabel.textContent = s.face || s.calibrated ? s.levelName : "No face";
   ui.stateSub.textContent = !s.calibrated ? (s.face ? "Calibrating: look at the road (the screen)…" : "Look at the camera")
     : s.reasons.length ? s.reasons.join(" · ") : `${state.model} · all signals normal`;
@@ -207,18 +208,28 @@ function render(f, s) {
     + (s.longClosures ? ` · ${s.longClosures} long` : "");
   ui.yawns.textContent = s.yawns;
   ui.yawnInfo.textContent = s.yawning ? "yawning…" : `head nods: ${s.nods}`;
-  ui.perclos.textContent = s.perclosReady ? pct(s.perclos, 1) : `warming up (${s.observedS.toFixed(0)} / ${RULES.perclosMinS} s)`;
-  ui.perclosBar.style.width = `${Math.min(100, (s.perclos / 0.3) * 100).toFixed(1)}%`;
-  ui.perclosBar.style.background = !s.perclosReady ? "var(--muted)" : s.perclos >= RULES.perclosBreak ? "var(--break)"
-    : s.perclos >= RULES.perclosAttention ? "var(--attention)" : "var(--ok)";
-  ui.perclosInfo.textContent = `Attention at ${pct(RULES.perclosAttention, 1)}, break at ${pct(RULES.perclosBreak)}`;
+  ui.perclos.textContent = s.perclosReady ? pct(s.perclos, 1) : "…";
+  gauge(ui.perclosArc, s.perclos / 0.3, !s.perclosReady ? "var(--muted)" : s.perclos >= RULES.perclosBreak ? "var(--break)"
+    : s.perclos >= RULES.perclosAttention ? "var(--attention)" : "var(--ok)");
+  ui.perclosInfo.textContent = s.perclosReady ? `Attention ${pct(RULES.perclosAttention, 1)} · break ${pct(RULES.perclosBreak)}`
+    : `warming up ${s.observedS.toFixed(0)} / ${RULES.perclosMinS} s`;
   const road = s.road ?? { pitch: 0, yaw: 0 };
   ui.pose.textContent = f.face ? `${(f.pitch - road.pitch).toFixed(0)}° / ${(f.yaw - road.yaw).toFixed(0)}° / ${f.roll.toFixed(0)}°` : "–";
   ui.poseInfo.textContent = s.calibrated ? "pitch and yaw relative to the calibrated road direction" : "calibrating: absolute angles";
-  ui.offroad.textContent = s.offRoad ? `${s.offRoadS.toFixed(1)} s` : "on the road";
-  ui.offroadInfo.textContent = `Attention after ${RULES.offRoadAttentionS} s, break after ${RULES.offRoadBreakS} s`;
+  ui.offroad.textContent = s.offRoad ? `${s.offRoadS.toFixed(1)} s` : s.calibrated ? "0.0 s" : "–";
+  gauge(ui.offroadArc, s.offRoadS / 5, s.offRoadS >= RULES.offRoadBreakS ? "var(--break)"
+    : s.offRoadS >= RULES.offRoadAttentionS ? "var(--attention)" : "var(--ok)");
+  ui.offroadInfo.textContent = `Attention ${RULES.offRoadAttentionS} s · break ${RULES.offRoadBreakS} s`;
   drawSpark();
   renderTemporal(s.temporal);
+}
+
+// Half-circle gauge (SVG path with pathLength 100): fill to `share` of the scale, in `color`.
+function gauge(el, share, color) {
+  const v = Math.max(0, Math.min(1, share));
+  el.style.strokeDasharray = `${(v * 100).toFixed(1)} 100`;
+  el.style.stroke = color;
+  el.style.opacity = v > 0.004 ? 1 : 0;  // a zero-length line with round ends would still draw a dot
 }
 
 function renderTemporal(t) {
@@ -328,7 +339,7 @@ async function startCamera() {
   ui.video.srcObject = state.stream;
   await ui.video.play();
   ui.viewport.style.aspectRatio = `${ui.video.videoWidth} / ${ui.video.videoHeight}`;
-  ui.camera.textContent = "Stop camera";
+  ui.camera.querySelector("span").textContent = "Stop camera";
   startSource(true);
 }
 
@@ -338,7 +349,7 @@ function stop() {
   state.source = null;
   ui.video.pause();
   ui.video.srcObject = null;
-  ui.camera.textContent = "Start camera";
+  ui.camera.querySelector("span").textContent = "Start camera";
 }
 
 async function openVideo(file) {
