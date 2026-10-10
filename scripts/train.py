@@ -8,7 +8,7 @@ Stop button ends the run cleanly (the best checkpoint so far is kept).
 
 Usage:
   python scripts/train.py --name eyeTrack0.1                       # MRL only, no augmentation
-  python scripts/train.py --name eyeTrack0.5 --sources mrl,cew --augment webcam   (Step 10)
+  python scripts/train.py --name eyeTrack0.5 --sources mrl,cew --augment webcam --cew-share 0.3
 
 Outputs:
   models/<name>/model.pt            weights of the epoch with the best validation accuracy
@@ -85,6 +85,8 @@ def main():
     parser.add_argument("--name", required=True, help="model version, e.g. eyeTrack0.1 -> models/eyeTrack0.1/")
     parser.add_argument("--sources", default="mrl", help="training data: mrl, or mrl,cew")
     parser.add_argument("--augment", default="none", help="none, or webcam (Step 10)")
+    parser.add_argument("--cew-share", type=float, default=0.0,
+                        help="share of CEW eyes in each epoch (drawn with replacement); 0 = natural share")
     parser.add_argument("--epochs", type=int, default=30)
     parser.add_argument("--batch-size", type=int, default=256)
     parser.add_argument("--lr", type=float, default=2e-3)
@@ -104,6 +106,11 @@ def main():
 
     X_tr, y_tr = torch.from_numpy(data["X"][tr]).to(device), torch.from_numpy(data["y"][tr].astype(np.int64)).to(device)
     X_va, y_va = torch.from_numpy(data["X"][va]).to(device), torch.from_numpy(data["y"][va].astype(np.int64)).to(device)
+    src_tr, src_va = data["source"][tr], data["source"][va]
+    names = {v: k for k, v in SOURCES.items()}
+    if args.cew_share > 0:  # each sample's chance of being drawn, so CEW fills cew_share of every epoch
+        share = np.where(src_tr == SOURCES["cew"], args.cew_share, 1 - args.cew_share)
+        draw_weights = torch.from_numpy(share / np.bincount(src_tr)[src_tr]).float().to(device)
 
     out_dir, plot_dir = ROOT / "models" / args.name, ROOT / "assets" / args.name
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -128,8 +135,12 @@ def main():
     runlog = RunLog(args.name, kind="train", classes=CLASSES, epochs=args.epochs, steps_per_epoch=steps_per_epoch,
                     config=config)
     log(f"Model {args.name} | EyeCNN {params:,} params | training on {device} | {len(tr):,} train / {len(va):,} val "
-        f"eyes ({args.sources}) | {args.epochs} epochs, batch {args.batch_size}, lr {args.lr}, augment={args.augment}\n")
-    log(f"{'epoch':>5} {'train_loss':>10} {'train_acc':>9} {'val_loss':>9} {'val_acc':>8} {'lr':>8} {'time':>6}")
+        f"eyes ({args.sources}) | {args.epochs} epochs, batch {args.batch_size}, lr {args.lr}, augment={args.augment}, "
+        f"cew_share={args.cew_share}\n")
+    header = "".join(f" {'val_' + names[s]:>8}" for s in sources) if len(sources) > 1 else ""
+    log(f"{'epoch':>5} {'train_loss':>10} {'train_acc':>9} {'val_loss':>9} {'val_acc':>8} {'lr':>8} {'time':>6}{header}")
+    if len(sources) > 1:
+        log("(val_acc = mean of the per-dataset validation accuracies, so the small CEW set counts as much as MRL)")
 
     history, best_acc, best_epoch, status = [], -1.0, 0, "finished"
     rng = np.random.default_rng(args.seed)
@@ -138,7 +149,8 @@ def main():
         for epoch in range(1, args.epochs + 1):
             t0 = time.time()
             model.train()
-            perm = torch.randperm(len(tr), device=device)
+            perm = (torch.multinomial(draw_weights, len(tr), replacement=True) if args.cew_share > 0
+                    else torch.randperm(len(tr), device=device))
             loss_sum = torch.zeros((), device=device)
             correct = torch.zeros((), device=device)
             for step in range(steps_per_epoch):
@@ -160,6 +172,10 @@ def main():
                     raise KeyboardInterrupt("stop button")
             train_loss, train_acc = (loss_sum / len(tr)).item(), (correct / len(tr)).item()
             val_loss, val_acc, cm, probs = evaluate(model, X_va, y_va, mean, std)
+            hits = (probs.argmax(1) == y_va).cpu().numpy()
+            per_source = {f"val_{names[s]}": float(hits[src_va == s].mean()) for s in sources}
+            if len(sources) > 1:
+                val_acc = float(np.mean(list(per_source.values())))  # each dataset counts equally
             lr = opt.param_groups[0]["lr"]
             best = val_acc > best_acc
             if best:
@@ -167,9 +183,9 @@ def main():
                 torch.save(model.state_dict(), out_dir / "model.pt")
             seconds = time.time() - t0
             history.append(dict(epoch=epoch, train_loss=train_loss, train_acc=train_acc, val_loss=val_loss,
-                                val_acc=val_acc, lr=lr, time=seconds))
+                                val_acc=val_acc, lr=lr, time=seconds, **per_source))
             runlog.epoch(epoch, train_loss=train_loss, train_acc=train_acc, val_loss=val_loss, val_acc=val_acc, lr=lr,
-                         epoch_time=seconds, best=best, confusion=cm)
+                         epoch_time=seconds, best=best, confusion=cm, **per_source)
             # sample predictions: 12 mistakes (if any) and 12 random validation eyes
             pred = probs.argmax(1).cpu().numpy()
             yv = y_va.cpu().numpy()
@@ -178,8 +194,9 @@ def main():
                                    rng.choice(len(yv), 24 - min(12, len(wrong)), replace=False)])
             runlog.samples(epoch, [{"image": data["X"][va[i]], "true": CLASSES[yv[i]], "pred": CLASSES[pred[i]],
                                     "conf": float(probs[i].max())} for i in pick])
+            extra = "".join(f" {v:>8.1%}" for v in per_source.values()) if len(sources) > 1 else ""
             log(f"{epoch:>5} {train_loss:>10.4f} {train_acc:>9.1%} {val_loss:>9.4f} {val_acc:>8.1%} {lr:>8.1e} "
-                f"{seconds:>5.1f}s{'  * saved' if best else ''}")
+                f"{seconds:>5.1f}s{extra}{'  * saved' if best else ''}")
     except KeyboardInterrupt:
         status = "stopped"
         log(f"\nStopped during epoch {len(history) + 1}; keeping the best checkpoint (epoch {best_epoch}).")

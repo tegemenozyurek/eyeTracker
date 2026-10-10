@@ -1,0 +1,25 @@
+                             eyeTrack0.1   eyeTrack0.5
+trained on                           mrl mrl,cew + aug
+training time                    7.8 min       8.2 min
+MRL test accuracy                  97.8%         98.1%
+MRL test macro F1                  97.8%         98.1%
+MRL test closed caught             98.2%         96.9%
+CEW test accuracy                  89.3%         96.7%
+CEW test macro F1                  89.2%         96.7%
+CEW test closed caught             84.3%         95.9%
+
+simulated webcam:
+  MRL clean                        97.8%         98.1%
+  MRL dim light                    94.1%         97.6%
+  MRL motion blur                  89.5%         95.5%
+  MRL low resolution               84.8%         95.7%
+  MRL sensor noise                 67.2%         95.7%
+  MRL detector jitter              97.1%         97.9%
+  MRL all combined                 60.6%         78.2%
+  CEW clean                        89.3%         96.7%
+  CEW dim light                    86.5%         95.5%
+  CEW motion blur                  86.5%         95.2%
+  CEW low resolution               87.6%         95.2%
+  CEW sensor noise                 70.4%         96.4%
+  CEW detector jitter              88.7%         96.0%
+  CEW all combined                 56.3%         84.7%
