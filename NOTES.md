@@ -133,3 +133,20 @@ must fix.
 **Domain gap, in one sentence:** the difference between the kind of images a model was trained on (here: infrared,
 sharp) and the kind it meets in use (webcam: visible light, small, noisy), which makes accuracy on the training
 kind a poor promise for the real one.
+
+## Step 8: web demo with the rules baseline
+
+The first live demo ([`web/`](web/)) runs entirely in the browser: MediaPipe's face landmarker finds 478 face points,
+52 expression scores ("blendshapes", such as eyeBlink and jawOpen) and the head's rotation in every webcam frame, and
+the `rules` baseline ([`web/rules.js`](web/rules.js)) turns them into **OK**, **Attention** or **Take a break**.
+The rules are the classic ones from driver-monitoring research: an eye counts as closed when its eyeBlink score is at
+least 0.5 (the same definition as in the RLDD features), PERCLOS is measured over the last 60 s, a single closure of
+1.5 s (a microsleep) triggers a break at once, three yawns in five minutes give Attention, and looking more than 25
+degrees away from the calibrated road direction for 2 s gives Attention, for 4 s a break. An alert only steps down
+after it has been gone for 4 s, so the display does not flicker. The thresholds are provisional; Steps 12 and 13 test
+them on UTA-RLDD. Ten automated tests with synthetic frames ([`web/rules.test.mjs`](web/rules.test.mjs)) check every
+rule, and one of them caught a wrong expectation of mine: after a 2 s closure the alert correctly falls back to
+Attention, not OK, because those 2 seconds raise the last minute's PERCLOS above 7.5%.
+
+**EAR (eye aspect ratio), in one sentence:** the eye's height divided by its width, measured from six landmarks
+around the eye; it drops towards zero as the eyelid closes (Soukupová and Čech, 2016).

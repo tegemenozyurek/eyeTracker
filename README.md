@@ -42,6 +42,7 @@ Each branch is merged into `main` and kept.
 | 5. 32x32 eye crops, subject-wise splits (no person in two splits) | [`step-05-eye-crops-splits`](https://github.com/tegemenozyurek/eyeTracker/tree/step-05-eye-crops-splits) |
 | 6. Eye CNN: 295,266 parameters, 0.75 ms for both eyes on CPU | [`step-06-define-cnn`](https://github.com/tegemenozyurek/eyeTracker/tree/step-06-define-cnn) |
 | 7. Train `eyeTrack0.1`: 97.8% MRL test, 89.3% CEW test, 60.6% simulated webcam | [`step-07-train-eyetrack01`](https://github.com/tegemenozyurek/eyeTracker/tree/step-07-train-eyetrack01) |
+| 8. Web demo with the `rules` baseline: PERCLOS, microsleeps, yawns, eyes off the road | [`step-08-web-demo-rules`](https://github.com/tegemenozyurek/eyeTracker/tree/step-08-web-demo-rules) |
 
 ## Project layout
 
@@ -63,6 +64,14 @@ python3.12 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 python scripts/check_env.py
 ```
+
+### Run the demo locally
+
+```bash
+python3 -m http.server -d web 8010     # then open http://localhost:8010
+```
+
+Everything runs in the browser; the camera feed never leaves the device.
 
 ### Get the data
 
