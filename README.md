@@ -39,7 +39,7 @@ person-wise folds, and a fair baseline computed on exactly the same windows.
 |---|---|
 | videos | 168 from 60 people, 526,983 frames at 5 fps (29.3 h); face found in 93.9% of frames |
 | windows | 8,817 of 60 s (811 of 9,628 positions dropped for too few faces) |
-| per fold | 1,516 to 1,860 windows, 12 people each; people in more than one fold: **0** |
+| per fold | 1,516 to 1,932 windows, 12 people each; people in more than one fold: **0** |
 
 ![Windows per fold](assets/rldd/windows.png)
 
