@@ -1,106 +1,58 @@
-# 👁️ eyeTracker
+# Step 9: one eye-crop function in Python and JavaScript
 
-[![Python](https://img.shields.io/badge/python-3.12-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![PyTorch](https://img.shields.io/badge/PyTorch-2.x-EE4C2C?logo=pytorch&logoColor=white)](https://pytorch.org/)
-[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+> This branch is one step of **[eyeTracker](https://github.com/tegemenozyurek/eyeTracker)**, a real-time driver
+> monitoring system that runs in the browser. Every step of the project has its own branch, and its README explains
+> what was done in that step. The project overview is the README on [`main`](https://github.com/tegemenozyurek/eyeTracker).
+>
+> Previous: [Step 8: web demo with the rules baseline](https://github.com/tegemenozyurek/eyeTracker/tree/step-08-web-demo-rules) ·
+> Next: Step 10: train eyeTrack0.5
 
-**Real-time driver monitoring in the browser.** A normal webcam watches the driver's eyes, mouth and head and
-detects **drowsiness** (eye closure, PERCLOS, slow blinks, yawning, head nodding) and **distraction**
-(looking away from the road), with three alert levels: OK, Attention, Take a break.
+## What was done
 
-> **Work in progress.** Built step by step following [BRIEF.md](BRIEF.md). Plain-language notes for every
-> step are in [NOTES.md](NOTES.md). Results, the live demo link and charts will appear here as they are produced.
+- **One crop, written twice:** [`src/eyecrop.py`](src/eyecrop.py) (training) and [`web/eyecrop.js`](web/eyecrop.js)
+  (browser) are line-by-line copies. The two corners of an eye (MediaPipe landmarks 33/133 and 362/263) are mapped by
+  a similarity transform (rotation, scale, shift) onto fixed points of a 32x32 crop, so every eye arrives level and
+  the same size. Pixels are sampled by hand (bilinear, 4x4 points averaged per output pixel) instead of OpenCV or the
+  canvas, which resample differently.
+- **Parity test:** [`scripts/eye_crop_parity.py`](scripts/eye_crop_parity.py) writes 24 cases (a smooth and a noise
+  image, eyes level, tilted up to 40°, 8 px and 90 px wide, half outside the image) with Python's crops;
+  [`web/eyecrop.test.mjs`](web/eyecrop.test.mjs) runs the JavaScript on them, also through the small pixel box the
+  browser actually reads.
+- **Calibration:** [`scripts/calibrate_eye_crop.py`](scripts/calibrate_eye_crop.py) measures how large and where the eye
+  should be in the crop. CEW's open eyes were cut from LFW photos; MediaPipe runs on 600 of those photos, and 84
+  framings are compared with the CEW patches. The winner is saved in [`models/eye_crop.json`](models/eye_crop.json).
+- **Real-face check:** [`scripts/eye_crop_realface.py`](scripts/eye_crop_realface.py) +
+  [`tools/eyecrop_check.html`](tools/eyecrop_check.html) run the whole pipeline (MediaPipe + crop) in Python and in the
+  browser on 20 LFW faces.
+- **The demo's "Model input" view** now shows exactly the aligned crop a model receives.
 
-## Planned models
+## Why
 
-| version | what it is | trained on |
-|---|---|---|
-| `rules` | reference baseline, no learning: eye aspect ratio, PERCLOS, yawn and head-pose thresholds | nothing |
-| `eyeTrack0.1` | small CNN, eye crop → open / closed | MRL Eye Dataset (infrared) |
-| `eyeTrack0.5` | same CNN family + eyes from normal cameras, MediaPipe-aligned crops, webcam augmentations | MRL Eye + CEW |
-| `eyeTrack1` | temporal model over per-frame features → alert / low vigilant / drowsy | UTA-RLDD (MediaPipe features, no video) |
+A model only works live if the eyes it sees in the browser look like the eyes it was trained on. If training and the
+browser cut eyes even slightly differently, accuracy measured in Python would promise more than the demo delivers.
 
-## Results so far
+## Results
 
-| model | MRL test (infrared) | CEW test (normal camera) | simulated webcam, MRL / CEW | training time |
-|---|---:|---:|---:|---:|
-| `eyeTrack0.1` | 97.8% | 89.3% | 60.6% / 56.3% | 7.8 min |
-
-Test people never appear in training. Full report: [`models/eyeTrack0.1/test_report.txt`](models/eyeTrack0.1/test_report.txt).
-
-## How it was built, step by step
-
-Every step has its own branch whose README explains what was done in that step, why, and its results.
-Each branch is merged into `main` and kept.
-
-| step | branch |
+| check | result |
 |---|---|
-| 1. Project skeleton, environment check | [`step-01-project-skeleton`](https://github.com/tegemenozyurek/eyeTracker/tree/step-01-project-skeleton) |
-| 2. Training monitor | [`step-02-training-monitor`](https://github.com/tegemenozyurek/eyeTracker/tree/step-02-training-monitor) |
-| 3. Download the data (1.76 GB) | [`step-03-download-data`](https://github.com/tegemenozyurek/eyeTracker/tree/step-03-download-data) |
-| 4. Explore the data: person and camera biases, drowsiness signal strength | [`step-04-explore-data`](https://github.com/tegemenozyurek/eyeTracker/tree/step-04-explore-data) |
-| 5. 32x32 eye crops, subject-wise splits (no person in two splits) | [`step-05-eye-crops-splits`](https://github.com/tegemenozyurek/eyeTracker/tree/step-05-eye-crops-splits) |
-| 6. Eye CNN: 295,266 parameters, 0.75 ms for both eyes on CPU | [`step-06-define-cnn`](https://github.com/tegemenozyurek/eyeTracker/tree/step-06-define-cnn) |
-| 7. Train `eyeTrack0.1`: 97.8% MRL test, 89.3% CEW test, 60.6% simulated webcam | [`step-07-train-eyetrack01`](https://github.com/tegemenozyurek/eyeTracker/tree/step-07-train-eyetrack01) |
-| 8. Web demo with the `rules` baseline: PERCLOS, microsleeps, yawns, eyes off the road | [`step-08-web-demo-rules`](https://github.com/tegemenozyurek/eyeTracker/tree/step-08-web-demo-rules) |
+| parity, full image | 24 of 24 crops match; largest difference 5.00e-7 gray levels |
+| parity, browser's pixel box | 24 of 24 match; largest difference 5.00e-7 |
+| calibration (600 CEW eyes) | best framing: eye width 0.60 of the crop, centre at 0.50; mean similarity 0.801 (first guess 0.70: 0.763). CEW's "L" patches are MediaPipe's left eye in 561 of 600 |
+| real faces (40 eyes, 20 LFW faces) | eye corners from browser and Python MediaPipe < 0.005 px apart; crops differ by 0.120 gray levels on average (largest pixel 0.63 of 255), only from JPEG decoding; similarity 1.000 |
 
-## Project layout
+![Calibration](assets/eye_crop/calibration.png)
+![Average eyes](assets/eye_crop/mean_eyes.png)
 
-```
-src/               shared code: models, eye alignment, augmentation, features
-scripts/           one script per step; each prints its results and saves a chart
-tools/monitor/     live dashboard for training runs and long jobs
-models/<version>/  weights, config, training log, test report
-assets/<version>/  charts
-web/               browser demo
-data/              datasets (git-ignored, downloaded by scripts)
-runs/<version>/    live metrics read by the monitor (git-ignored)
-```
+Our crops of the LFW photos look like the CEW patches on average. The average MRL eye is framed tighter, one more
+reason why `eyeTrack0.5` trains with random zoom and shift.
 
-## Setup
+## Try it
 
 ```bash
-python3.12 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-python scripts/check_env.py
+git checkout step-09-eye-crop-parity
+node web/eyecrop.test.mjs                      # the parity test
+python scripts/download_data.py lfw            # 118 MB, for the calibration only
+python scripts/calibrate_eye_crop.py           # about 75 s
+python scripts/eye_crop_realface.py && python -m http.server 8020
+# then open http://localhost:8020/tools/eyecrop_check.html
 ```
-
-### Run the demo locally
-
-```bash
-python3 -m http.server -d web 8010     # then open http://localhost:8010
-```
-
-Everything runs in the browser; the camera feed never leaves the device.
-
-### Get the data
-
-```bash
-python scripts/download_data.py     # MRL Eye, CEW, UTA-RLDD features: 1.76 GB, needs a Kaggle token
-python scripts/clean_data.py        # disk use per dataset; delete the ones you no longer need
-```
-
-### Watch training live
-
-```bash
-python tools/monitor/app.py        # opens http://127.0.0.1:8501
-```
-
-Every training run and long job writes its progress to `runs/<name>/metrics.jsonl`; the monitor shows live loss and
-accuracy curves, ETA, an overfitting warning, per-class precision/recall, the confusion matrix, sample predictions,
-progress bars for long jobs, a run comparison and a Stop button. Try it without any data:
-`python tools/monitor/dummy_run.py`.
-
-## Data
-
-| dataset | used by | what it is |
-|---|---|---|
-| [MRL Eye](http://mrl.cs.vsb.cz/eyedataset) | `eyeTrack0.1`, `eyeTrack0.5` | 84,898 infrared eye crops from 37 people, open / closed |
-| [CEW](https://parnec.nuaa.edu.cn/_upload/tpl/02/db/731/template731/pages/xtan/ClosedEyeDatabases.html) | `eyeTrack0.5` | 4,846 eye patches from normal-camera photos, open / closed |
-| [UTA-RLDD](https://sites.google.com/view/utarldd/home) | `eyeTrack1` | 60 drivers, alert / low vigilant / drowsy; used as MediaPipe features (1,115,058 frames, no images) from [UTA-RLDD Face Features](https://www.kaggle.com/datasets/abdulrahmankhengari/uta-rldd-face-features) |
-
-No face from UTA-RLDD is ever shown in this project: the version used here contains numbers only.
-
-## License
-
-Code is released under the [MIT License](LICENSE). Datasets belong to their creators and are not redistributed here.
