@@ -213,3 +213,21 @@ cuts the same crops as Python, these numbers carry over to the demo.
 
 **ONNX, in one sentence:** an open file format for trained neural networks, so a model trained in PyTorch can run
 somewhere else, here in the browser, without PyTorch.
+
+## Step 12: UTA-RLDD features and windows
+
+[`prepare_rldd.py`](scripts/prepare_rldd.py) turned the 168 quality-checked UTA-RLDD videos (60 people, 29.3 hours)
+into what `eyeTrack1` will learn from: 13 numbers per frame, five frames per second (eye-blink, squint and look-down
+scores for each eye, jaw opening, eye and mouth openness ratios, and the head's pitch, yaw and roll). Every one of
+them is defined exactly as in the dataset's own extraction code, because the browser has to compute the same numbers
+live in Step 14. The frames are cut into 8,817 windows of 60 seconds, a new one every 10 seconds, kept only when the
+face was found in at least 70% of the frames; each window gets its video's label. The authors' five folds (12 people
+each) keep every person in exactly one fold, so a model is always tested on drivers it never trained on.
+
+To compare `eyeTrack1` with exactly what the demo does today, every video was also replayed through the demo's own
+rules ([`web/rules.js`](web/rules.js), via [`tools/rules_on_rldd.mjs`](tools/rules_on_rldd.mjs)). The median
+PERCLOS per window rises from 1.7% (alert) to 4.0% (low vigilant) and 8.3% (drowsy), but the rules still say "OK" for
+44.2% of the drowsy windows and "Take a break" for 8.3% of the alert ones: that is the bar `eyeTrack1` has to clear.
+
+**Window, in one sentence:** a fixed stretch of time (here 60 seconds of frames) that the model looks at as a whole,
+because drowsiness shows in how the eyes and head behave over time, not in a single frame.
