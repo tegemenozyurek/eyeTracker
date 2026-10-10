@@ -150,3 +150,26 @@ Attention, not OK, because those 2 seconds raise the last minute's PERCLOS above
 
 **EAR (eye aspect ratio), in one sentence:** the eye's height divided by its width, measured from six landmarks
 around the eye; it drops towards zero as the eyelid closes (Soukupová and Čech, 2016).
+
+## Step 9: one eye-crop function in Python and JavaScript
+
+A model only works live if the eyes it sees in the browser look like the eyes it was trained on. The eye crop is
+now one function written twice, line by line: [`src/eyecrop.py`](src/eyecrop.py) for training and
+[`web/eyecrop.js`](web/eyecrop.js) for the browser. It takes the two corners of an eye from MediaPipe, rotates and
+scales the image so the corners land on fixed points of a 32x32 crop, and samples the pixels with hand-written code
+instead of OpenCV or the browser's canvas, which would resample differently. A parity test
+([`web/eyecrop.test.mjs`](web/eyecrop.test.mjs)) runs both on 24 hard cases (tilted, tiny, huge and half-outside eyes,
+on a noise image that punishes any difference): all 24 match within 5e-7 gray levels, also when the browser reads
+only the small box of pixels around the eye.
+
+**How big should the eye be in the crop?** Measured, not guessed: CEW's open eyes were cut from LFW photos, so
+[`calibrate_eye_crop.py`](scripts/calibrate_eye_crop.py) ran MediaPipe on 600 of those photos and tried 84 framings.
+The eye spanning 60% of the crop width, vertically centred, is the most similar to the CEW patches (mean correlation
+0.801, against 0.763 for my first guess of 70%). On 20 real LFW faces the full browser pipeline and the Python
+pipeline find the same eye corners (less than 0.005 px apart) and their crops differ by a mean of 0.12 gray levels out
+of 255, only because the browser and Python decode JPEG images slightly differently
+([`tools/eyecrop_check.html`](tools/eyecrop_check.html)). The average MRL eye is framed tighter than ours, one more
+reason why `eyeTrack0.5` trains with random zoom and shift.
+
+**Parity test, in one sentence:** a test that feeds the same inputs to two implementations that must agree (here
+Python for training and JavaScript for the browser) and fails if they differ, so a silent mismatch cannot creep in.

@@ -14,6 +14,7 @@ so nothing stays in hidden caches. Requires the Kaggle token in ~/.kaggle/access
 Usage:
   python scripts/download_data.py              # all three
   python scripts/download_data.py mrl cew      # some of them
+  python scripts/download_data.py lfw          # LFW photos, only for the eye-crop calibration (Step 9)
 
 Outputs: data/mrl/, data/cew/, data/rldd/  and  assets/data_overview.png
 """
@@ -42,7 +43,9 @@ DATASETS = {
     "mrl": "imadeddinedjerarda/mrl-eye-dataset",
     "cew": "faisal7/cew-dataset",
     "rldd": "abdulrahmankhengari/uta-rldd-face-features",
+    "lfw": "jessicali9530/lfw-dataset",  # Step 9 only: the photos CEW's open eyes were cut from
 }
+DEFAULT = ["mrl", "cew", "rldd"]
 # MRL file name: s0001_00001_0_0_0_0_0_01.png = subject, image, gender, glasses, eye state, reflections, lighting, sensor
 MRL_NAME = re.compile(r"s(\d{4})_(\d{5})_(\d)_(\d)_(\d)_(\d)_(\d)_(\d{2})\.png$")
 RLDD_CLASSES = {0: "alert", 5: "low vigilant", 10: "drowsy"}
@@ -154,18 +157,19 @@ def plot_overview(counts):
 
 
 def main():
-    names = sys.argv[1:] or list(DATASETS)
+    names = sys.argv[1:] or DEFAULT
     DATA.mkdir(exist_ok=True)
     with RunLog("_download", kind="job", unit="MB / files", datasets=names) as log:
         for name in names:
             print(f"{name}: {DATASETS[name]}", flush=True)
             download(name, DATASETS[name], log)
     checks = {"mrl": check_mrl, "cew": check_cew, "rldd": check_rldd}
-    counts = {name: checks[name]() for name in names}
+    counts = {name: checks[name]() for name in names if name in checks}
     sizes = {n: sum(f.stat().st_size for f in (DATA / n).rglob("*") if f.is_file()) for n in names}
     print("\nDisk use: " + ", ".join(f"{n} {s / 1e6:,.0f} MB" for n, s in sizes.items())
           + f"  (total {sum(sizes.values()) / 1e9:.2f} GB)")
-    plot_overview(counts)
+    if counts:
+        plot_overview(counts)
 
 
 if __name__ == "__main__":

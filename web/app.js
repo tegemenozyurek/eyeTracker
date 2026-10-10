@@ -2,6 +2,7 @@
 // Everything runs in the browser; no frame ever leaves the device.
 import { FaceLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.1.0/vision_bundle.mjs";
 import { DriverRules, RULES } from "./rules.js";
+import { CORNERS, cropBox, eyeCrop, toGray } from "./eyecrop.js";
 
 const MEDIAPIPE = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.1.0/wasm";
 const LANDMARKER_MODEL =
@@ -176,20 +177,34 @@ function drawSpark() {
   ctx.stroke();
 }
 
-// Debug view: a square box around each eye, shrunk to 32x32 grayscale. Step 9 replaces this with the
-// aligned crop that training and the browser share.
+// The aligned 32x32 eye crop shared with training (web/eyecrop.js = src/eyecrop.py, checked by
+// web/eyecrop.test.mjs). Only the small box of pixels the crop needs is read from the frame, at 1:1, so the
+// crop sees the camera's own pixels; corners are shifted into that box. Returns a Float64Array (0-255).
+const work = document.createElement("canvas");
+const workCtx = work.getContext("2d", { willReadFrequently: true });
+
+export function extractEye(source, pts, eye) {
+  const [i, j] = CORNERS[eye];
+  const width = source.videoWidth || source.width, height = source.videoHeight || source.height;
+  let [x0, y0, x1, y1] = cropBox(pts[i], pts[j], state.cropSpec);
+  x0 = Math.max(0, x0); y0 = Math.max(0, y0); x1 = Math.min(width, x1); y1 = Math.min(height, y1);
+  const w = Math.max(1, x1 - x0), h = Math.max(1, y1 - y0);
+  work.width = w;
+  work.height = h;
+  workCtx.drawImage(source, x0, y0, w, h, 0, 0, w, h);
+  const gray = toGray(workCtx.getImageData(0, 0, w, h).data, w, h);
+  const shift = ([x, y]) => [x - x0, y - y0];
+  return eyeCrop(gray, w, h, shift(pts[i]), shift(pts[j]), state.cropSpec);
+}
+
+// Debug view: exactly what a model receives.
 function renderCrops(video, pts) {
-  for (const [idx, canvas] of [[EYE_R_RING, ui.cropR], [EYE_L_RING, ui.cropL]]) {
-    const xs = idx.map((i) => pts[i][0]), ys = idx.map((i) => pts[i][1]);
-    const cx = (Math.min(...xs) + Math.max(...xs)) / 2, cy = (Math.min(...ys) + Math.max(...ys)) / 2;
-    const side = 1.6 * (Math.max(...xs) - Math.min(...xs));
-    const ctx = canvas.getContext("2d", { willReadFrequently: true });
-    ctx.drawImage(video, cx - side / 2, cy - side / 2, side, side, 0, 0, 32, 32);
-    const img = ctx.getImageData(0, 0, 32, 32);
-    for (let i = 0; i < img.data.length; i += 4) {
-      const g = 0.299 * img.data[i] + 0.587 * img.data[i + 1] + 0.114 * img.data[i + 2];
-      img.data[i] = img.data[i + 1] = img.data[i + 2] = g;
-    }
+  const s = state.cropSpec.size;
+  for (const [eye, canvas] of [["right", ui.cropR], ["left", ui.cropL]]) {
+    const crop = extractEye(video, pts, eye);
+    const ctx = canvas.getContext("2d");
+    const img = ctx.createImageData(s, s);
+    crop.forEach((v, k) => img.data.set([v, v, v, 255], 4 * k));
     ctx.putImageData(img, 0, 0);
   }
 }
@@ -299,6 +314,7 @@ function buildModels() {
 
 async function init() {
   buildModels();
+  state.cropSpec = await (await fetch("eye_crop.json")).json();
   const vision = await FilesetResolver.forVisionTasks(MEDIAPIPE);
   state.landmarker = await FaceLandmarker.createFromOptions(vision, {
     baseOptions: { modelAssetPath: LANDMARKER_MODEL, delegate: "GPU" },
