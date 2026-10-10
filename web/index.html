@@ -76,7 +76,7 @@
     <div class="crops" id="crops" hidden>
       <div class="k">What a model would see (32x32 eye crops)</div>
       <div class="crops-row"><canvas id="cropR" width="32" height="32"></canvas><canvas id="cropL" width="32" height="32"></canvas></div>
-      <div class="note">Box crops for now; Step 9 replaces them with the aligned crop shared with training.</div>
+      <div class="note">Right and left eye, aligned on the eye corners exactly as in training (Step 9).</div>
     </div>
   </aside>
 </main>
@@ -98,6 +98,6 @@
   <p class="note">The camera feed is processed only on this device. No image or video is uploaded or stored.</p>
 </footer>
 
-<script type="module" src="app.js?v=1"></script>
+<script type="module" src="app.js?v=2"></script>
 </body>
 </html>

@@ -1,0 +1,12 @@
+{
+  "size": 32,
+  "eye_width": 0.6,
+  "center_x": 0.5,
+  "center_y": 0.5,
+  "supersample": 4,
+  "calibration": {
+    "cew_open_eyes": 600,
+    "mean_ncc": 0.8005,
+    "cew_L_is_mediapipe": "left"
+  }
+}
