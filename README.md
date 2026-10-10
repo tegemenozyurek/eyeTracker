@@ -25,8 +25,11 @@ detects **drowsiness** (eye closure, PERCLOS, slow blinks, yawning, head nodding
 | model | MRL test (infrared) | CEW test (normal camera) | simulated webcam, MRL / CEW | training time |
 |---|---:|---:|---:|---:|
 | `eyeTrack0.1` | 97.8% | 89.3% | 60.6% / 56.3% | 7.8 min |
+| **`eyeTrack0.5`** | **98.1%** | **96.7%** | **78.2% / 84.7%** | 8.2 min |
 
-Test people never appear in training. Full report: [`models/eyeTrack0.1/test_report.txt`](models/eyeTrack0.1/test_report.txt).
+Test people never appear in training. `eyeTrack0.5` trains with webcam-style augmentation, which uses the same kinds of effects as the simulated-webcam test, so it is prepared for that test by design. Full table: [`models/eye_models_comparison.txt`](models/eye_models_comparison.txt).
+
+![Eye models](assets/eye_models_comparison.png)
 
 ## How it was built, step by step
 
@@ -44,6 +47,7 @@ Each branch is merged into `main` and kept.
 | 7. Train `eyeTrack0.1`: 97.8% MRL test, 89.3% CEW test, 60.6% simulated webcam | [`step-07-train-eyetrack01`](https://github.com/tegemenozyurek/eyeTracker/tree/step-07-train-eyetrack01) |
 | 8. Web demo with the `rules` baseline: PERCLOS, microsleeps, yawns, eyes off the road | [`step-08-web-demo-rules`](https://github.com/tegemenozyurek/eyeTracker/tree/step-08-web-demo-rules) |
 | 9. One eye crop in Python and JavaScript: parity-tested, calibrated on CEW | [`step-09-eye-crop-parity`](https://github.com/tegemenozyurek/eyeTracker/tree/step-09-eye-crop-parity) |
+| 10. Train `eyeTrack0.5`: CEW 96.7%, simulated webcam 78.2% / 84.7% | [`step-10-train-eyetrack05`](https://github.com/tegemenozyurek/eyeTracker/tree/step-10-train-eyetrack05) |
 
 ## Project layout
 
