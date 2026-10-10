@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Feature check: browser vs Python</title>
+<style>
+  body { font: 14px/1.5 system-ui, sans-serif; margin: 32px; background: #0f172a; color: #e2e8f0; }
+  pre { background: #111827; padding: 14px; border-radius: 10px; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<h2>eyeTrack1 features on real faces: browser (web/features.js) vs Python (src/rldd_features.py)</h2>
+<p>Run <code>python scripts/feature_parity.py</code> first and serve the repo root (<code>python -m http.server 8020</code>).</p>
+<pre id="out">running…</pre>
+
+<script type="module">
+import { FaceLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.1.0/vision_bundle.mjs";
+import { FEATURES, frameFeatures } from "../web/features.js";
+
+const py = await (await fetch("../runs/_feature_check/python.json")).json();
+const vision = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.1.0/wasm");
+const landmarker = await FaceLandmarker.createFromOptions(vision, {
+  baseOptions: { modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task" },
+  runningMode: "IMAGE", numFaces: 1, outputFaceBlendshapes: true, outputFacialTransformationMatrixes: true,
+});
+const worst = FEATURES.map(() => 0), worstSwapped = FEATURES.map(() => 0);
+let faces = 0;
+for (const face of py.faces) {
+  // createImageBitmap works even when the page is in a background tab (img.decode() does not)
+  const bmp = await createImageBitmap(await (await fetch(`../${face.photo}`)).blob());
+  const c = document.createElement("canvas");
+  c.width = bmp.width;
+  c.height = bmp.height;
+  c.getContext("2d").drawImage(bmp, 0, 0);
+  const r = landmarker.detect(c);
+  if (!r.faceLandmarks.length) continue;
+  faces++;
+  const bs = Object.fromEntries(r.faceBlendshapes[0].categories.map((x) => [x.categoryName, x.score]));
+  const m = r.facialTransformationMatrixes[0].data;
+  const got = frameFeatures(r.faceLandmarks[0], bs, m);
+  // the same with the matrix read the other way round (row-major), to show which layout is right
+  const swapped = frameFeatures(r.faceLandmarks[0], bs, Array.from({ length: 16 }, (_, k) => m[(k % 4) * 4 + Math.floor(k / 4)]));
+  got.forEach((v, i) => { worst[i] = Math.max(worst[i], Math.abs(v - face.features[i])); });
+  swapped.forEach((v, i) => { worstSwapped[i] = Math.max(worstSwapped[i], Math.abs(v - face.features[i])); });
+}
+const lines = [`${faces} LFW faces; largest difference browser - Python per feature:`, ""];
+FEATURES.forEach((f, i) => lines.push(`  ${f.padEnd(22)} ${worst[i].toExponential(2).padStart(10)}` +
+  (i >= 10 ? `    (matrix read row-major instead: ${worstSwapped[i].toExponential(2)})` : "")));
+document.getElementById("out").textContent = lines.join("\n");
+window.result = lines.join("\n");
+</script>
+</body>
+</html>

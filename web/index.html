@@ -6,7 +6,7 @@
 <title>eyeTracker · live</title>
 <meta name="description" content="Real-time driver monitoring (drowsiness and distraction) that runs entirely in your browser. Video never leaves your device.">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>👁️</text></svg>">
-<link rel="stylesheet" href="style.css?v=2">
+<link rel="stylesheet" href="style.css?v=3">
 </head>
 <body>
 <header class="top">
@@ -71,6 +71,11 @@
       </div>
     </div>
 
+    <div class="temporal" id="temporal" hidden>
+      <div class="k">Driver state from eyeTrack1 · <span id="temporalInfo"></span></div>
+      <div id="temporalBars"></div>
+    </div>
+
     <div class="spark"><div class="k">Eye closure, last 60 s</div><canvas id="spark" height="60"></canvas></div>
 
     <div class="crops" id="crops" hidden>
@@ -98,6 +103,6 @@
   <p class="note">The camera feed is processed only on this device. No image or video is uploaded or stored.</p>
 </footer>
 
-<script type="module" src="app.js?v=3"></script>
+<script type="module" src="app.js?v=4"></script>
 </body>
 </html>

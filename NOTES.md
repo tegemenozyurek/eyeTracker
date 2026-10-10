@@ -258,3 +258,21 @@ person. A real car could learn the driver's personal baseline over many drives; 
 **Cross-validation, in one sentence:** split the people into five groups, train five times, each time testing on the
 group left out, so every person is tested once by a model that never saw them and the result does not depend on one
 lucky split.
+
+## Step 14: eyeTrack1 in the demo
+
+`eyeTrack1` now runs in the browser. The demo samples the 13 face features five times per second into a one-minute
+buffer, exactly as the training windows were built, and every 2 seconds the GRU (17 kB as ONNX) judges the last
+minute; a new "Driver state" panel shows its three probabilities. With `eyeTrack1` selected it replaces the PERCLOS
+and yawn rules, while the microsleep and eyes-off-the-road rules stay on as safety nets.
+
+The risky part was making the live features identical to the training features, because they come from a dataset
+someone else extracted. [`web/features.js`](web/features.js) and [`src/rldd_features.py`](src/rldd_features.py) copy the
+dataset's own formulas, and on 12 real faces ([`tools/feature_check.html`](tools/feature_check.html)) the browser
+and Python agree within 1e-4 for every feature and 0.002 degrees for the head angles. That check also settled the
+head-pose matrix layout by measurement: read the other way round, the angles would be off by up to 59 degrees. The
+demo's whole `eyeTrack1` path (sampling, buffer, normalization, ONNX Runtime Web) gives PyTorch's answer on 4 real
+UTA-RLDD windows, within 1.25e-7 ([`tools/onnx_check.html`](tools/onnx_check.html)).
+
+**Feature parity, in one sentence:** making sure the numbers a model receives live are computed exactly like the ones
+it was trained on, because a model can only be as right as its inputs are faithful.

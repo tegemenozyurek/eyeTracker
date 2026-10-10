@@ -124,3 +124,8 @@ footer .note { margin: 4px 0 0; }
 .model-tip.show { opacity: 1; }
 .model-tip b { font-family: ui-monospace, Menlo, monospace; }
 .model-tip ul { margin: 6px 0 0; padding-left: 18px; color: var(--muted); }
+
+.temporal { background: var(--card-2); border-radius: 10px; padding: 9px 11px; display: grid; gap: 6px; }
+.tbar { display: grid; grid-template-columns: 92px 1fr 40px; align-items: center; gap: 8px; font-size: 13px; }
+.tbar b { text-align: right; font-variant-numeric: tabular-nums; }
+.tbar .meter { margin: 0; }

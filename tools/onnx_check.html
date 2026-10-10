@@ -20,6 +20,20 @@ import * as ort from "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.30.0/dist/o
 ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.30.0/dist/";
 
 const check = await (await fetch("../web/models/onnx_check.json")).json();
+
+// The demo page in a hidden frame, to call its own eyeTrack1 code (window.eyeTracker).
+async function waitForApp() {
+  const frame = document.createElement("iframe");
+  frame.src = "../web/index.html";
+  frame.style.display = "none";
+  document.body.append(frame);
+  for (let i = 0; i < 120; i++) {
+    await new Promise((r) => setTimeout(r, 500));
+    const app = frame.contentWindow?.eyeTracker;
+    if (app?.state?.models?.length && !frame.contentDocument.getElementById("camera").disabled) return app;
+  }
+  return null;
+}
 const lines = [`${check.images.length} test eyes, true labels: ${check.labels.join(" ")}`, ""];
 for (const [version, ref] of Object.entries(check.models)) {
   const session = await ort.InferenceSession.create(`../web/models/${version}.onnx`, { executionProviders: ["wasm"] });
@@ -43,6 +57,27 @@ for (const [version, ref] of Object.entries(check.models)) {
   const pairMs = (performance.now() - t1) / 50;
   lines.push(`${version}: same answer as PyTorch for ${same} of ${ref.probs.length} eyes; largest difference in P(closed) ` +
     `${worst.toExponential(2)}; both eyes take ${pairMs.toFixed(2)} ms (WASM)`);
+}
+// eyeTrack1 through the demo's own path: real UTA-RLDD windows fed frame by frame (5 fps) into temporalStep.
+const app = await waitForApp();
+if (app && check.temporal) {
+  await app.selectModel("eyeTrack1");
+  const T = app.state.temporal;
+  let worst = 0, same = 0;
+  for (let w = 0; w < check.temporal.raw.length; w++) {
+    Object.assign(T, { buffer: [], probs: null, lastSample: null, lastRun: null });
+    let s;
+    for (let i = 0; i < check.temporal.raw[w].length; i++) {
+      s = { level: 0, levelName: "OK", reasons: [] };
+      await app.temporalStep({ t: i / T.fps, face: !!check.temporal.face[w][i], feat: check.temporal.raw[w][i] }, s);
+    }
+    const ref = check.temporal.probs[w];
+    worst = Math.max(worst, ...T.probs.map((p, k) => Math.abs(p - ref[k])));
+    same += T.probs.indexOf(Math.max(...T.probs)) === ref.indexOf(Math.max(...ref));
+  }
+  lines.push("", `eyeTrack1 through the demo's sampling + buffer + normalization + ONNX Runtime Web, ${check.temporal.raw.length} ` +
+    `real UTA-RLDD windows (${check.temporal.labels.join(", ")}): same answer as PyTorch for ${same} of ` +
+    `${check.temporal.raw.length}; largest probability difference ${worst.toExponential(2)}`);
 }
 document.getElementById("out").textContent = lines.join("\n");
 window.result = lines.join("\n");
