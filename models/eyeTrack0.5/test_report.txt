@@ -1,0 +1,26 @@
+Model: eyeTrack0.5 | trained on mrl,cew | augment=webcam | 295,266 params | best epoch 21 | training time 8.2 min
+
+MRL test (15,493 eyes): accuracy 98.1%, macro F1 98.1%, recall closed 96.9%, recall open 99.2%
+CEW test (726 eyes): accuracy 96.7%, macro F1 96.7%, recall closed 95.9%, recall open 97.4%
+
+simulated webcam      MRL test    CEW test
+clean                    98.1%       96.7%
+dim light                97.6%       95.5%
+motion blur              95.5%       95.2%
+low resolution           95.7%       95.2%
+sensor noise             95.7%       96.4%
+detector jitter          97.9%       96.0%
+all combined             78.2%       84.7%
+
+MRL test by recording condition (accuracy alone flatters conditions with few closed eyes,
+so the share of closed eyes the model catches is shown too):
+  RealSense camera                   12,014 eyes  accuracy  97.6%  closed eyes caught  96.9% of 7,258
+  IDS camera                          1,836 eyes  accuracy  99.5%  closed eyes caught  97.7% of   130
+  Aptina camera (never trained on)    1,643 eyes  accuracy  99.9%  closed eyes caught  97.3% of    73
+  bad lighting                        7,536 eyes  accuracy  98.2%  closed eyes caught  97.4% of 3,712
+  good lighting                       7,957 eyes  accuracy  98.0%  closed eyes caught  96.5% of 3,749
+  no glasses                         12,062 eyes  accuracy  98.1%  closed eyes caught  96.4% of 4,598
+  glasses                             3,431 eyes  accuracy  98.0%  closed eyes caught  97.9% of 2,863
+  no reflections                     11,840 eyes  accuracy  97.9%  closed eyes caught  96.9% of 5,637
+  small reflections                   1,491 eyes  accuracy  99.9%  closed eyes caught  99.7% of   358
+  big reflections                     2,162 eyes  accuracy  97.7%  closed eyes caught  96.6% of 1,466

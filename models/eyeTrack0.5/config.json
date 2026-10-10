@@ -1,0 +1,28 @@
+{
+  "name": "eyeTrack0.5",
+  "sources": "mrl,cew",
+  "augment": "webcam",
+  "cew_share": 0.3,
+  "epochs": 30,
+  "batch_size": 256,
+  "lr": 0.002,
+  "weight_decay": 0.0001,
+  "seed": 42,
+  "input": "eye32",
+  "size": 32,
+  "mean": 0.34802359342575073,
+  "std": 0.14348910748958588,
+  "classes": [
+    "closed",
+    "open"
+  ],
+  "params": 295266,
+  "train_images": 60100,
+  "val_images": 13425,
+  "device": "mps",
+  "best_epoch": 21,
+  "best_val_acc": 0.9836964701522175,
+  "epochs_done": 30,
+  "train_seconds": 492.6,
+  "status": "finished"
+}

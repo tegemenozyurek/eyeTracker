@@ -150,3 +150,24 @@ Attention, not OK, because those 2 seconds raise the last minute's PERCLOS above
 
 **EAR (eye aspect ratio), in one sentence:** the eye's height divided by its width, measured from six landmarks
 around the eye; it drops towards zero as the eyelid closes (Soukupová and Čech, 2016).
+
+## Step 10: train eyeTrack0.5
+
+`eyeTrack0.5` is the same network as `eyeTrack0.1`, trained differently: on infrared MRL eyes **and** normal-camera
+CEW eyes (CEW drawn often enough to make up 30% of every epoch, although it is only 6% of the data), and every
+training eye is randomly degraded the way a car webcam would degrade it: mirrored, rotated, zoomed, shifted, darker or
+brighter, blurred, lower in resolution, noisy ([`src/augment.py`](src/augment.py), preview in
+[`assets/augmentation.png`](assets/augmentation.png)). A first version of the augmentation was too harsh (many dark
+infrared eyes became black noise that not even a person could label) and was toned down before training.
+
+**Result** ([`compare_eye_models.py`](scripts/compare_eye_models.py), same 7 + 354 test people for both models): on the
+simulated webcam with all effects at once, accuracy rises from 60.6% to **78.2%** on MRL and from 56.3% to **84.7%** on
+CEW; on clean CEW eyes from 89.3% to **96.7%**, and clean MRL stays where it was (97.8% → 98.1%). Sensor noise alone
+no longer hurts (MRL 67.2% → 95.7%). Training accuracy is now below validation accuracy, because the model trains on
+the harder, degraded eyes; validation loss stays flat, so there is no overfitting. The price: on clean MRL eyes it
+catches slightly fewer closed eyes (98.2% → 96.9%). One caveat, stated openly: the training augmentation and the
+simulated-webcam test use the same kinds of effects, so `eyeTrack0.5` was prepared for that test by design; the real
+judge is the live webcam.
+
+**Data augmentation, in one sentence:** showing the model a randomly altered version of each training image every
+time, so it learns what stays the same (the eyelid) instead of details that change between cameras (noise, light, blur).
