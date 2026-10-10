@@ -1,121 +1,74 @@
-# 👁️ eyeTracker
+# Step 13: train eyeTrack1
 
-[![Python](https://img.shields.io/badge/python-3.12-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![PyTorch](https://img.shields.io/badge/PyTorch-2.x-EE4C2C?logo=pytorch&logoColor=white)](https://pytorch.org/)
-[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+> This branch is one step of **[eyeTracker](https://github.com/tegemenozyurek/eyeTracker)**, a real-time driver
+> monitoring system that runs in the browser. Every step of the project has its own branch, and its README explains
+> what was done in that step. The project overview is the README on [`main`](https://github.com/tegemenozyurek/eyeTracker).
+>
+> Previous: [Step 12: UTA-RLDD features and windows](https://github.com/tegemenozyurek/eyeTracker/tree/step-12-rldd-features) ·
+> Next: Step 14: eyeTrack1 in the demo
 
-**Real-time driver monitoring in the browser.** A normal webcam watches the driver's eyes, mouth and head and
-detects **drowsiness** (eye closure, PERCLOS, slow blinks, yawning, head nodding) and **distraction**
-(looking away from the road), with three alert levels: OK, Attention, Take a break.
+## What was done
 
-> **Work in progress.** Built step by step following [BRIEF.md](BRIEF.md). Plain-language notes for every
-> step are in [NOTES.md](NOTES.md). Results, the live demo link and charts will appear here as they are produced.
+- **[`src/temporal.py`](src/temporal.py): `eyeTrack1`**, a bidirectional GRU that reads one minute (300 frames at 5 fps)
+  of the 13 face features plus a "face found" flag and outputs alert / low vigilant / drowsy.
+- **[`scripts/train_eyetrack1.py`](scripts/train_eyetrack1.py): 5-fold cross-validation** with the authors' folds. For
+  test fold *k*, the next fold picks the best epoch and the other three train; normalization statistics come from the
+  training folds only. Every one of the 60 drivers is tested once, by a model that never saw them.
+- **Baselines on exactly the same windows:** the demo's own rules (replayed in Step 12), and PERCLOS alone with two
+  thresholds fitted on the four non-test folds ("rules, PERCLOS tuned").
+- **The paper's numbers**, quoted from Ghoddoosian, Galib, Athitsos, CVPR Workshops 2019, Table 2.
+- **A final model** on all 60 people for the demo (`models/eyeTrack1/model.pt`, 3 epochs = median best epoch).
 
-## Planned models
+## What happened
 
-| version | what it is | trained on |
-|---|---|---|
-| `rules` | reference baseline, no learning: eye aspect ratio, PERCLOS, yawn and head-pose thresholds | nothing |
-| `eyeTrack0.1` | small CNN, eye crop → open / closed | MRL Eye Dataset (infrared) |
-| `eyeTrack0.5` | same CNN family + eyes from normal cameras, MediaPipe-aligned crops, webcam augmentations | MRL Eye + CEW |
-| `eyeTrack1` | temporal model over per-frame features → alert / low vigilant / drowsy | UTA-RLDD (MediaPipe features, no video) |
+1. **The first model memorized the drivers:** 98.6% right on its 36 training people, 32.7% (chance) on fold 1's
+   validation people; stopped. Every driver has exactly one video per class, so a network can learn "this face in this
+   video" instead of drowsiness.
+2. **Four settings were compared on the validation folds only** ([`selection.txt`](models/eyeTrack1/selection.txt)):
+   a much smaller GRU (3,699 parameters) with strong regularization (A, 45.3% mean validation macro F1), plus
+   per-person normalization (B, 52.1%, not usable live), plus a simulated new driver: every training window gets a
+   random offset and scale per feature (C, 48.1% at strength 0.5, 47.5% at 1.0). **C 0.5 became `eyeTrack1`.**
 
-## Results so far
+## Results
 
-| model | MRL test (infrared) | CEW test (normal camera) | simulated webcam, MRL / CEW | training time |
-|---|---:|---:|---:|---:|
-| `eyeTrack0.1` | 97.8% | 89.3% | 60.6% / 56.3% | 7.8 min |
-| **`eyeTrack0.5`** | **98.1%** | **96.7%** | **78.2% / 84.7%** | 8.2 min |
+From [`models/eyeTrack1/cv_report.txt`](models/eyeTrack1/cv_report.txt): 8,817 windows of 60 s, 168 videos, 60 people.
 
-Test people never appear in training. `eyeTrack0.5` trains with webcam-style augmentation, which uses the same kinds of effects as the simulated-webcam test, so it is prepared for that test by design. Full table: [`models/eye_models_comparison.txt`](models/eye_models_comparison.txt).
+| 5-fold CV, people never seen | `eyeTrack1` | rules (demo) | PERCLOS, tuned thresholds |
+|---|---:|---:|---:|
+| 3 classes, window accuracy (chance 33.3%) | 44.4% | 44.8% | **48.1%** |
+| 3 classes, macro F1 | 44.4% | 41.7% | **48.3%** |
+| recall alert / low vigilant / drowsy | 49.2 / 38.0 / 46.4% | 80.5 / 18.0 / 36.4% | 50.2 / 46.7 / 47.5% |
+| 3 classes, video accuracy (vote) | 44.0% | 44.6% | 47.0% |
+| alert vs drowsy, window accuracy | 66.8% | **68.7%** | 65.5% |
+| drowsy windows caught | 59.2% | 55.8% | 82.1% |
 
-![Eye models](assets/eye_models_comparison.png)
+**Reported by the dataset's authors** (HM-LSTM on blink features, 5 folds, 180 videos): 54% per blink sequence,
+65.2% per video; human judgment 57.8% per video.
 
-**On real faces through the full live pipeline** (MediaPipe → aligned eye crop → model; 716 eyes of test people, [`check_live_pipeline.py`](scripts/check_live_pipeline.py)):
+![Comparison](assets/eyeTrack1/comparison.png)
 
-| method | accuracy | closed eyes caught |
-|---|---:|---:|
-| `rules` (MediaPipe blink score) | 89.5% | 79.9% |
-| `eyeTrack0.1` | 91.5% | 89.8% |
-| **`eyeTrack0.5`** | **96.5%** | **95.5%** |
+**`eyeTrack1` does not beat the rules.** It is level with the demo's rules, below a single tuned PERCLOS threshold,
+and clearly below the paper. With 36 training people per fold, a learned temporal model cannot yet separate
+drowsiness from who the driver is. The training curves show it: validation accuracy depends far more on which people
+are in the fold (around 30% for fold 4, 55% for fold 2) than on the epoch.
 
-## How it was built, step by step
+![Training curves](assets/eyeTrack1/training_curves.png)
 
-Every step has its own branch whose README explains what was done in that step, why, and its results.
-Each branch is merged into `main` and kept.
+**What would help** (analysis, [`cv_report.txt`](models/eyeTrack1_personnorm/cv_report.txt)): centring each driver's
+features on their own average over all their recordings lifts the same network to **49.7%** (3 classes, macro F1
+49.9%) and **72.4%** alert vs drowsy, above every rule. It needs the driver's data from all three sessions, which a
+live demo does not have, so it is reported but not deployed. A car that learns its driver's baseline over many drives
+could use it.
 
-| step | branch |
-|---|---|
-| 1. Project skeleton, environment check | [`step-01-project-skeleton`](https://github.com/tegemenozyurek/eyeTracker/tree/step-01-project-skeleton) |
-| 2. Training monitor | [`step-02-training-monitor`](https://github.com/tegemenozyurek/eyeTracker/tree/step-02-training-monitor) |
-| 3. Download the data (1.76 GB) | [`step-03-download-data`](https://github.com/tegemenozyurek/eyeTracker/tree/step-03-download-data) |
-| 4. Explore the data: person and camera biases, drowsiness signal strength | [`step-04-explore-data`](https://github.com/tegemenozyurek/eyeTracker/tree/step-04-explore-data) |
-| 5. 32x32 eye crops, subject-wise splits (no person in two splits) | [`step-05-eye-crops-splits`](https://github.com/tegemenozyurek/eyeTracker/tree/step-05-eye-crops-splits) |
-| 6. Eye CNN: 295,266 parameters, 0.75 ms for both eyes on CPU | [`step-06-define-cnn`](https://github.com/tegemenozyurek/eyeTracker/tree/step-06-define-cnn) |
-| 7. Train `eyeTrack0.1`: 97.8% MRL test, 89.3% CEW test, 60.6% simulated webcam | [`step-07-train-eyetrack01`](https://github.com/tegemenozyurek/eyeTracker/tree/step-07-train-eyetrack01) |
-| 8. Web demo with the `rules` baseline: PERCLOS, microsleeps, yawns, eyes off the road | [`step-08-web-demo-rules`](https://github.com/tegemenozyurek/eyeTracker/tree/step-08-web-demo-rules) |
-| 9. One eye crop in Python and JavaScript: parity-tested, calibrated on CEW | [`step-09-eye-crop-parity`](https://github.com/tegemenozyurek/eyeTracker/tree/step-09-eye-crop-parity) |
-| 10. Train `eyeTrack0.5`: CEW 96.7%, simulated webcam 78.2% / 84.7% | [`step-10-train-eyetrack05`](https://github.com/tegemenozyurek/eyeTracker/tree/step-10-train-eyetrack05) |
-| 11. Eye models in the browser (ONNX); live pipeline on real test faces: 96.5% | [`step-11-onnx-demo`](https://github.com/tegemenozyurek/eyeTracker/tree/step-11-onnx-demo) |
-| 12. UTA-RLDD: 8,817 windows of 60 s, 5 person-wise folds, rules replayed on every window | [`step-12-rldd-features`](https://github.com/tegemenozyurek/eyeTracker/tree/step-12-rldd-features) |
+Not identical setups: the paper uses 180 videos and blink sequences, this project 168 quality-checked videos and 60 s
+windows of MediaPipe features; window accuracy is compared with their sequence accuracy. Labels are the drivers' own
+reports for a whole video, so a "drowsy" video can contain alert minutes.
 
-## Project layout
-
-```
-src/               shared code: models, eye alignment, augmentation, features
-scripts/           one script per step; each prints its results and saves a chart
-tools/monitor/     live dashboard for training runs and long jobs
-models/<version>/  weights, config, training log, test report
-assets/<version>/  charts
-web/               browser demo
-data/              datasets (git-ignored, downloaded by scripts)
-runs/<version>/    live metrics read by the monitor (git-ignored)
-```
-
-## Setup
+## Try it
 
 ```bash
-python3.12 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-python scripts/check_env.py
+git checkout step-13-train-eyetrack1
+python scripts/train_eyetrack1.py --person-aug 0.5 --lr 1e-3 --epochs 20          # about 6 min on CPU
+python scripts/train_eyetrack1.py --subject-norm --tag _personnorm --no-final     # the analysis
+python scripts/train_eyetrack1.py --select --person-aug 0.5 --lr 1e-3 --epochs 20 --tag _sel   # validation only
 ```
-
-### Run the demo locally
-
-```bash
-python3 -m http.server -d web 8010     # then open http://localhost:8010
-```
-
-Everything runs in the browser; the camera feed never leaves the device.
-
-### Get the data
-
-```bash
-python scripts/download_data.py     # MRL Eye, CEW, UTA-RLDD features: 1.76 GB, needs a Kaggle token
-python scripts/clean_data.py        # disk use per dataset; delete the ones you no longer need
-```
-
-### Watch training live
-
-```bash
-python tools/monitor/app.py        # opens http://127.0.0.1:8501
-```
-
-Every training run and long job writes its progress to `runs/<name>/metrics.jsonl`; the monitor shows live loss and
-accuracy curves, ETA, an overfitting warning, per-class precision/recall, the confusion matrix, sample predictions,
-progress bars for long jobs, a run comparison and a Stop button. Try it without any data:
-`python tools/monitor/dummy_run.py`.
-
-## Data
-
-| dataset | used by | what it is |
-|---|---|---|
-| [MRL Eye](http://mrl.cs.vsb.cz/eyedataset) | `eyeTrack0.1`, `eyeTrack0.5` | 84,898 infrared eye crops from 37 people, open / closed |
-| [CEW](https://parnec.nuaa.edu.cn/_upload/tpl/02/db/731/template731/pages/xtan/ClosedEyeDatabases.html) | `eyeTrack0.5` | 4,846 eye patches from normal-camera photos, open / closed |
-| [UTA-RLDD](https://sites.google.com/view/utarldd/home) | `eyeTrack1` | 60 drivers, alert / low vigilant / drowsy; used as MediaPipe features (1,115,058 frames, no images) from [UTA-RLDD Face Features](https://www.kaggle.com/datasets/abdulrahmankhengari/uta-rldd-face-features) |
-
-No face from UTA-RLDD is ever shown in this project: the version used here contains numbers only.
-
-## License
-
-Code is released under the [MIT License](LICENSE). Datasets belong to their creators and are not redistributed here.
