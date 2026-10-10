@@ -1,0 +1,11 @@
+eyeTrack1 settings chosen on VALIDATION folds only (scripts/train_eyetrack1.py --select); test folds untouched.
+A = hidden 16, dropout 0.5, weight decay 0.05, noise 0.2, lr 2e-3, 15 epochs; B = A + per-person normalization;
+C<s> = A + per-window offset/scale augmentation of strength s, lr 1e-3, 20 epochs. The first attempt (hidden 48,
+dropout 0.3) reached 98.6% training but 32.7% validation accuracy on fold 1 and was stopped (memorized the drivers).
+
+SELECTION eyeTrack1_selA: mean best validation macro F1 45.3% (folds [0.449, 0.534, 0.456, 0.341, 0.482]), best epochs [5, 4, 4, 1, 1], 4.2 min
+SELECTION eyeTrack1_selB: mean best validation macro F1 52.1% (folds [0.488, 0.513, 0.627, 0.434, 0.545]), best epochs [1, 1, 4, 6, 5], 17.2 min
+SELECTION eyeTrack1_selC0.5: mean best validation macro F1 48.1% (folds [0.464, 0.538, 0.509, 0.4, 0.492]), best epochs [1, 15, 3, 1, 9], 18.5 min
+SELECTION eyeTrack1_selC1.0: mean best validation macro F1 47.5% (folds [0.442, 0.528, 0.527, 0.406, 0.471]), best epochs [1, 15, 5, 3, 9], 14.5 min
+
+Chosen for the demo: C0.5 (best deployable). B is reported as an analysis only.

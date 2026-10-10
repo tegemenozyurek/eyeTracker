@@ -39,6 +39,15 @@ Test people never appear in training. `eyeTrack0.5` trains with webcam-style aug
 | `eyeTrack0.1` | 91.5% | 89.8% |
 | **`eyeTrack0.5`** | **96.5%** | **95.5%** |
 
+**Drowsiness over time** (UTA-RLDD, 60 drivers, 5-fold cross-validation, people never seen in training; [`cv_report.txt`](models/eyeTrack1/cv_report.txt)):
+
+| | `eyeTrack1` | rules (demo) | PERCLOS, tuned thresholds |
+|---|---:|---:|---:|
+| 3 classes, window accuracy (chance 33.3%) | 44.4% | 44.8% | 48.1% |
+| alert vs drowsy | 66.8% | 68.7% | 65.5% |
+
+`eyeTrack1` does not beat the rules; the dataset's authors report 54% per blink sequence (Ghoddoosian et al. 2019). Comparing each driver with their own average lifts the same network to 49.7% / 72.4%, but needs data from several of the driver's sessions ([analysis](models/eyeTrack1_personnorm/cv_report.txt)).
+
 ## How it was built, step by step
 
 Every step has its own branch whose README explains what was done in that step, why, and its results.
@@ -58,6 +67,7 @@ Each branch is merged into `main` and kept.
 | 10. Train `eyeTrack0.5`: CEW 96.7%, simulated webcam 78.2% / 84.7% | [`step-10-train-eyetrack05`](https://github.com/tegemenozyurek/eyeTracker/tree/step-10-train-eyetrack05) |
 | 11. Eye models in the browser (ONNX); live pipeline on real test faces: 96.5% | [`step-11-onnx-demo`](https://github.com/tegemenozyurek/eyeTracker/tree/step-11-onnx-demo) |
 | 12. UTA-RLDD: 8,817 windows of 60 s, 5 person-wise folds, rules replayed on every window | [`step-12-rldd-features`](https://github.com/tegemenozyurek/eyeTracker/tree/step-12-rldd-features) |
+| 13. Train `eyeTrack1` (GRU, 5-fold CV): 44.4% on new drivers, level with the rules | [`step-13-train-eyetrack1`](https://github.com/tegemenozyurek/eyeTracker/tree/step-13-train-eyetrack1) |
 
 ## Project layout
 

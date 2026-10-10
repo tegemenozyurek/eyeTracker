@@ -1,0 +1,17 @@
+5-fold cross-validation on UTA-RLDD: 8,817 windows of 60 s, 168 videos, 60 people; every window judged by a model that never saw its person
+                                    eyeTrack1_personnorm          rules (demo) rules (PERCLOS tuned)
+3 classes, window accuracy                         49.7%                 44.8%                 48.1%
+3 classes, macro F1                                49.9%                 41.7%                 48.3%
+  recall alert                                     50.9%                 80.5%                 50.2%
+  recall low vigilant                              47.5%                 18.0%                 46.7%
+  recall drowsy                                    50.9%                 36.4%                 47.5%
+3 classes, video accuracy (vote)                   47.0%                 44.6%                 47.0%
+alert vs drowsy, window accuracy                   72.4%                 68.7%                 65.5%
+  drowsy windows caught                            72.3%                 55.8%                 82.1%
+  alert windows left alone                         72.4%                 80.5%                 50.2%
+
+Reported by the dataset's authors (Ghoddoosian, Galib, Athitsos, CVPR Workshops 2019, Table 2; blink features, 5 folds):
+  HM-LSTM: blink-sequence accuracy 54%, video accuracy 65.2%; human judgment: video accuracy 57.8%
+  Not identical setups: they use 180 videos and blink sequences, we use 168 quality-checked videos and
+  60 s windows of MediaPipe features; window accuracy is compared with their sequence accuracy (BSA).
+Cross-validation took 14.7 min.
