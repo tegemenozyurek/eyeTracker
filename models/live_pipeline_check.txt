@@ -1,0 +1,7 @@
+Live pipeline on real face photos of test people only (MediaPipe -> aligned crop -> model)
+358 faces, 716 eyes; MediaPipe found no face in 5 closed-eye and 0 open-eye photos
+
+method          accuracy  closed eyes caught  open eyes right
+rules              89.5%               79.9%            97.9%
+eyeTrack0.1        91.5%               89.8%            92.9%
+eyeTrack0.5        96.5%               95.5%            97.4%

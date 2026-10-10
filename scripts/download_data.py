@@ -15,6 +15,7 @@ Usage:
   python scripts/download_data.py              # all three
   python scripts/download_data.py mrl cew      # some of them
   python scripts/download_data.py lfw          # LFW photos, only for the eye-crop calibration (Step 9)
+  python scripts/download_data.py cew_faces    # CEW's closed-eye face photos, only for the live-pipeline check (Step 11)
 
 Outputs: data/mrl/, data/cew/, data/rldd/  and  assets/data_overview.png
 """
@@ -44,6 +45,7 @@ DATASETS = {
     "cew": "faisal7/cew-dataset",
     "rldd": "abdulrahmankhengari/uta-rldd-face-features",
     "lfw": "jessicali9530/lfw-dataset",  # Step 9 only: the photos CEW's open eyes were cut from
+    "cew_faces": "ketkibkulkarni/cew-eyes-dataset",  # Step 11 only: the face photos CEW's closed eyes were cut from
 }
 DEFAULT = ["mrl", "cew", "rldd"]
 # MRL file name: s0001_00001_0_0_0_0_0_01.png = subject, image, gender, glasses, eye state, reflections, lighting, sensor

@@ -1,0 +1,53 @@
+{
+  "default": "eyeTrack0.5",
+  "models": [
+    {
+      "version": "eyeTrack0.1",
+      "file": "models/eyeTrack0.1.onnx",
+      "size": 32,
+      "mean": 0.33904027938842773,
+      "std": 0.13461589813232422,
+      "classes": [
+        "closed",
+        "open"
+      ],
+      "params": 295266,
+      "train_images": 56704,
+      "train_minutes": 7.8,
+      "tagline": "Eye CNN, infrared only",
+      "changes": [
+        "Learns open / closed eyes from 56,704 infrared MRL eyes",
+        "No augmentation: the baseline",
+        "Expect trouble on a normal webcam (domain gap)"
+      ],
+      "mrl_test": 0.978,
+      "cew_test": 0.893,
+      "webcam_mrl": 0.606,
+      "webcam_cew": 0.563
+    },
+    {
+      "version": "eyeTrack0.5",
+      "file": "models/eyeTrack0.5.onnx",
+      "size": 32,
+      "mean": 0.34802359342575073,
+      "std": 0.14348910748958588,
+      "classes": [
+        "closed",
+        "open"
+      ],
+      "params": 295266,
+      "train_images": 60100,
+      "train_minutes": 8.2,
+      "tagline": "Eye CNN for webcams",
+      "changes": [
+        "Adds normal-camera eyes (CEW)",
+        "Webcam-style augmentation: blur, noise, dim light, low resolution",
+        "Eyes cut with the same aligned crop as this demo"
+      ],
+      "mrl_test": 0.981,
+      "cew_test": 0.9670000000000001,
+      "webcam_mrl": 0.782,
+      "webcam_cew": 0.847
+    }
+  ]
+}

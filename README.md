@@ -31,6 +31,14 @@ Test people never appear in training. `eyeTrack0.5` trains with webcam-style aug
 
 ![Eye models](assets/eye_models_comparison.png)
 
+**On real faces through the full live pipeline** (MediaPipe → aligned eye crop → model; 716 eyes of test people, [`check_live_pipeline.py`](scripts/check_live_pipeline.py)):
+
+| method | accuracy | closed eyes caught |
+|---|---:|---:|
+| `rules` (MediaPipe blink score) | 89.5% | 79.9% |
+| `eyeTrack0.1` | 91.5% | 89.8% |
+| **`eyeTrack0.5`** | **96.5%** | **95.5%** |
+
 ## How it was built, step by step
 
 Every step has its own branch whose README explains what was done in that step, why, and its results.
@@ -48,6 +56,7 @@ Each branch is merged into `main` and kept.
 | 8. Web demo with the `rules` baseline: PERCLOS, microsleeps, yawns, eyes off the road | [`step-08-web-demo-rules`](https://github.com/tegemenozyurek/eyeTracker/tree/step-08-web-demo-rules) |
 | 9. One eye crop in Python and JavaScript: parity-tested, calibrated on CEW | [`step-09-eye-crop-parity`](https://github.com/tegemenozyurek/eyeTracker/tree/step-09-eye-crop-parity) |
 | 10. Train `eyeTrack0.5`: CEW 96.7%, simulated webcam 78.2% / 84.7% | [`step-10-train-eyetrack05`](https://github.com/tegemenozyurek/eyeTracker/tree/step-10-train-eyetrack05) |
+| 11. Eye models in the browser (ONNX); live pipeline on real test faces: 96.5% | [`step-11-onnx-demo`](https://github.com/tegemenozyurek/eyeTracker/tree/step-11-onnx-demo) |
 
 ## Project layout
 

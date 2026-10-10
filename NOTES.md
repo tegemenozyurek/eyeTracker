@@ -194,3 +194,22 @@ judge is the live webcam.
 
 **Data augmentation, in one sentence:** showing the model a randomly altered version of each training image every
 time, so it learns what stays the same (the eyelid) instead of details that change between cameras (noise, light, blur).
+
+## Step 11: export to ONNX and plug into the demo
+
+Both eye models now run in the browser. [`export_web.py`](scripts/export_web.py) converts them from PyTorch to ONNX,
+a format the browser can run with ONNX Runtime Web, and checks that nothing changed on the way: on 512 test eyes the
+ONNX models give the same answer as PyTorch every time (largest difference in the raw scores 2.3e-05), and in the
+browser itself the same holds for 16 test eyes, with both eyes classified in about 3 ms
+([`tools/onnx_check.html`](tools/onnx_check.html)). In the demo, picking `eyeTrack0.1` or `eyeTrack0.5` keeps all the
+rules, but "is this eye closed?" is now answered by the CNN on the aligned eye crop instead of MediaPipe's blink score.
+
+**The most meaningful check so far** ([`check_live_pipeline.py`](scripts/check_live_pipeline.py)) runs the whole live
+pipeline (MediaPipe, aligned crop, model) on real face photos of test people only: 172 CEW photos with closed eyes and
+191 LFW photos with open eyes (716 eyes; MediaPipe missed 5 faces). The rules baseline is right for 89.5% of eyes but
+catches only 79.9% of closed eyes; `eyeTrack0.1` reaches 91.5% (89.8% of closed eyes), and `eyeTrack0.5` **96.5%**
+(**95.5%** of closed eyes, 97.4% of open eyes). Because Step 9 showed that the browser finds the same eye corners and
+cuts the same crops as Python, these numbers carry over to the demo.
+
+**ONNX, in one sentence:** an open file format for trained neural networks, so a model trained in PyTorch can run
+somewhere else, here in the browser, without PyTorch.
