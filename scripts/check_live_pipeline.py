@@ -118,9 +118,9 @@ def main():
             ax.annotate(f"{bar.get_height():.0%}", (bar.get_x() + bar.get_width() / 2, bar.get_height()), xytext=(0, 3),
                         textcoords="offset points", ha="center", fontsize=8, color=COLORS["muted"])
     ax.set_xticks(x, labels)
-    ax.set_ylim(0, 1.1)
+    ax.set_ylim(0, 1.25)
     ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda v, _: f"{v:.0%}"))
-    ax.legend(frameon=False, ncols=3, loc="lower left")
+    ax.legend(frameon=False, ncols=3, loc="upper left")
     ax.set_title(f"Live pipeline on real faces of test people ({len(y)} eyes)", loc="left", fontsize=13)
     finish(ax)
     fig.tight_layout()
