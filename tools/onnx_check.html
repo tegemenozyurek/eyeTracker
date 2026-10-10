@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ONNX check: browser vs PyTorch</title>
+<style>
+  body { font: 14px/1.5 system-ui, sans-serif; margin: 32px; background: #0f172a; color: #e2e8f0; }
+  pre { background: #111827; padding: 14px; border-radius: 10px; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<h2>Eye models in the browser (ONNX Runtime Web) vs PyTorch</h2>
+<p>Run <code>python scripts/export_web.py</code> first, then serve the repo root (<code>python -m http.server 8020</code>).
+The 16 test eyes in <code>web/models/onnx_check.json</code> are classified here with ONNX Runtime Web (WASM),
+exactly as the demo does, and compared with PyTorch's probabilities.</p>
+<pre id="out">running…</pre>
+
+<script type="module">
+import * as ort from "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.30.0/dist/ort.wasm.min.mjs";
+ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.30.0/dist/";
+
+const check = await (await fetch("../web/models/onnx_check.json")).json();
+const lines = [`${check.images.length} test eyes, true labels: ${check.labels.join(" ")}`, ""];
+for (const [version, ref] of Object.entries(check.models)) {
+  const session = await ort.InferenceSession.create(`../web/models/${version}.onnx`, { executionProviders: ["wasm"] });
+  const n = 32 * 32, data = new Float32Array(check.images.length * n);
+  check.images.forEach((img, k) => img.forEach((v, i) => { data[k * n + i] = (v / 255 - ref.mean) / ref.std; }));
+  const t0 = performance.now();
+  const out = await session.run({ input: new ort.Tensor("float32", data, [check.images.length, 1, 32, 32]) });
+  const ms = performance.now() - t0;
+  const z = out.logits.data;
+  let worst = 0, same = 0;
+  ref.probs.forEach((p, k) => {
+    const closed = 1 / (1 + Math.exp(z[2 * k + 1] - z[2 * k]));
+    worst = Math.max(worst, Math.abs(closed - p[0]));
+    same += (closed >= 0.5) === (p[0] >= 0.5);
+  });
+  // speed as in the demo: both eyes (batch 2), averaged over 50 runs after a warm-up
+  const pair = new ort.Tensor("float32", data.slice(0, 2 * n), [2, 1, 32, 32]);
+  await session.run({ input: pair });
+  const t1 = performance.now();
+  for (let i = 0; i < 50; i++) await session.run({ input: pair });
+  const pairMs = (performance.now() - t1) / 50;
+  lines.push(`${version}: same answer as PyTorch for ${same} of ${ref.probs.length} eyes; largest difference in P(closed) ` +
+    `${worst.toExponential(2)}; both eyes take ${pairMs.toFixed(2)} ms (WASM)`);
+}
+document.getElementById("out").textContent = lines.join("\n");
+window.result = lines.join("\n");
+</script>
+</body>
+</html>

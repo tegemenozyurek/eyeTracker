@@ -3,6 +3,9 @@
 import { FaceLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.1.0/vision_bundle.mjs";
 import { DriverRules, RULES } from "./rules.js";
 import { CORNERS, cropBox, eyeCrop, toGray } from "./eyecrop.js";
+import * as ort from "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.30.0/dist/ort.wasm.min.mjs";
+
+ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.30.0/dist/";
 
 const MEDIAPIPE = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.1.0/wasm";
 const LANDMARKER_MODEL =
@@ -15,14 +18,12 @@ const EYE_R_RING = [33, 246, 161, 160, 159, 158, 157, 173, 133, 155, 154, 153, 1
 const EYE_L_RING = [362, 398, 384, 385, 386, 387, 388, 466, 263, 249, 390, 373, 374, 380, 381, 382];
 const LIPS = [61, 185, 40, 39, 37, 0, 267, 269, 270, 409, 291, 375, 321, 405, 314, 17, 84, 181, 91, 146];
 
-const MODELS = [
-  { version: "rules", live: true, tagline: "Baseline, no learning",
-    changes: ["Eye closed when MediaPipe's eyeBlink score ≥ 0.5", "PERCLOS over 60 s, long closures, yawns",
-              "Head pose vs a calibrated road direction"] },
-  { version: "eyeTrack0.1", live: false, tagline: "Eye CNN on infrared eyes (Step 7)", changes: ["Arrives in the demo in Step 11"] },
-  { version: "eyeTrack0.5", live: false, tagline: "Eye CNN for webcams (Step 10)", changes: ["Arrives in the demo in Step 11"] },
-  { version: "eyeTrack1", live: false, tagline: "Temporal drowsiness model (Step 13)", changes: ["Arrives in the demo in Step 14"] },
-];
+// rules first, then the eye models from web/models/manifest.json (scripts/export_web.py), then what is still to come.
+const RULES_MODEL = { version: "rules", live: true, tagline: "Baseline, no learning",
+  changes: ["Eye closed when MediaPipe's eyeBlink score ≥ 0.5", "PERCLOS over 60 s, long closures, yawns",
+            "Head pose vs a calibrated road direction"] };
+const COMING = [{ version: "eyeTrack1", live: false, tagline: "Temporal drowsiness model (Step 13)",
+  changes: ["Arrives in the demo in Step 14"] }];
 
 const $ = (id) => document.getElementById(id);
 const ui = Object.fromEntries(["video", "overlay", "viewport", "empty", "banner", "camera", "file", "recalibrate", "sound",
@@ -31,7 +32,7 @@ const ui = Object.fromEntries(["video", "overlay", "viewport", "empty", "banner"
   "offroadInfo", "spark", "crops", "cropL", "cropR"].map((id) => [id, $(id)]));
 
 const state = { landmarker: null, rules: new DriverRules(), source: null, stream: null, loopId: 0, mirrored: true,
-  fps: 0, lastFrame: 0, detectMs: 0, history: [], lastLevel: 0, model: "rules" };
+  fps: 0, lastFrame: 0, detectMs: 0, history: [], lastLevel: 0, model: "rules", eyeModel: null, inferMs: 0, models: [] };
 
 // ---------------------------------------------------------------- per-frame signals
 
@@ -60,8 +61,22 @@ function signals(result, width, height, t) {
   const pts = lm.map((p) => [p.x * width, p.y * height]);
   const bs = Object.fromEntries(result.faceBlendshapes[0].categories.map((c) => [c.categoryName, c.score]));
   const pose = result.facialTransformationMatrixes?.[0] ? headPose(result.facialTransformationMatrixes[0].data) : { pitch: 0, yaw: 0, roll: 0 };
+  // blinkL / blinkR are the eye-closure scores the rules use: MediaPipe's blendshapes, or an eye model's
+  // probability of "closed" when one is selected (see classifyEyes).
   return { t, face: true, pts, blinkL: bs.eyeBlinkLeft, blinkR: bs.eyeBlinkRight, jawOpen: bs.jawOpen,
-    earL: ear(pts, EYE_L), earR: ear(pts, EYE_R), ...pose };
+    bsBlinkL: bs.eyeBlinkLeft, bsBlinkR: bs.eyeBlinkRight, earL: ear(pts, EYE_L), earR: ear(pts, EYE_R), ...pose };
+}
+
+// Both eyes through the selected eye CNN in one call; returns P(closed) for [right, left].
+async function classifyEyes(crops) {
+  const m = state.eyeModel, n = 32 * 32;
+  const data = new Float32Array(2 * n);
+  crops.forEach((c, k) => { for (let i = 0; i < n; i++) data[k * n + i] = (c[i] / 255 - m.mean) / m.std; });
+  const t0 = performance.now();
+  const out = await m.session.run({ input: new ort.Tensor("float32", data, [2, 1, 32, 32]) });
+  state.inferMs = 0.9 * state.inferMs + 0.1 * (performance.now() - t0);
+  const z = out.logits.data;
+  return [0, 1].map((k) => 1 / (1 + Math.exp(z[2 * k + 1] - z[2 * k])));  // softmax over 2 classes, class 0 = closed
 }
 
 // ---------------------------------------------------------------- loop
@@ -75,15 +90,24 @@ async function loop(id) {
     const result = state.landmarker.detectForVideo(v, now);
     state.detectMs = 0.9 * state.detectMs + 0.1 * (performance.now() - t0);
     const f = signals(result, v.videoWidth, v.videoHeight, now / 1000);
+    let crops = null;
+    if (f.face && (state.eyeModel || ui.showCrops.checked)) crops = ["right", "left"].map((eye) => extractEye(v, f.pts, eye));
+    if (f.face && state.eyeModel) {
+      const model = state.eyeModel;
+      const [pR, pL] = await classifyEyes(crops);
+      if (model !== state.eyeModel) return loop(id);  // the model was switched meanwhile
+      Object.assign(f, { blinkR: pR, blinkL: pL });
+    }
     const s = state.rules.update(f);
     state.history.push({ t: f.t, closure: f.face ? (f.blinkL + f.blinkR) / 2 : null, level: s.level });
     while (state.history.length && state.history[0].t < f.t - 60) state.history.shift();
     draw(f, v.videoWidth, v.videoHeight);
     render(f, s);
-    if (ui.showCrops.checked && f.face) renderCrops(v, f.pts);
+    if (ui.showCrops.checked && crops) renderCrops(crops);
     if (state.lastFrame) state.fps = 0.9 * state.fps + 0.1 * (1000 / Math.max(1, now - state.lastFrame));
     state.lastFrame = now;
-    ui.stats.textContent = `${state.fps.toFixed(0)} fps · face tracking ${state.detectMs.toFixed(1)} ms · ${state.model}`;
+    ui.stats.textContent = `${state.fps.toFixed(0)} fps · face tracking ${state.detectMs.toFixed(1)} ms` +
+      (state.eyeModel ? ` · ${state.model} ${state.inferMs.toFixed(1)} ms (both eyes)` : " · rules");
   }
   if (v.requestVideoFrameCallback) v.requestVideoFrameCallback(() => loop(id));
   else requestAnimationFrame(() => loop(id));
@@ -130,8 +154,9 @@ function render(f, s) {
   state.lastLevel = s.level;
 
   const eye = (b) => (b == null ? "–" : b >= RULES.closedBlink ? "closed" : "open");
-  ui.eyeL.textContent = f.face ? `${eye(f.blinkL)} · EAR ${f.earL.toFixed(2)}` : "–";
-  ui.eyeR.textContent = f.face ? `${eye(f.blinkR)} · EAR ${f.earR.toFixed(2)}` : "–";
+  const how = (b) => (state.eyeModel ? ` · ${pct(b)} closed` : ` · blink ${b.toFixed(2)}`);
+  ui.eyeL.textContent = f.face ? `${eye(f.blinkL)}${how(f.blinkL)} · EAR ${f.earL.toFixed(2)}` : "–";
+  ui.eyeR.textContent = f.face ? `${eye(f.blinkR)}${how(f.blinkR)} · EAR ${f.earR.toFixed(2)}` : "–";
   ui.eyeLBar.style.width = f.face ? pct(f.blinkL, 1) : "0%";
   ui.eyeRBar.style.width = f.face ? pct(f.blinkR, 1) : "0%";
   ui.blinks.textContent = s.blinks;
@@ -198,10 +223,9 @@ export function extractEye(source, pts, eye) {
 }
 
 // Debug view: exactly what a model receives.
-function renderCrops(video, pts) {
+function renderCrops(crops) {
   const s = state.cropSpec.size;
-  for (const [eye, canvas] of [["right", ui.cropR], ["left", ui.cropL]]) {
-    const crop = extractEye(video, pts, eye);
+  for (const [crop, canvas] of [[crops[0], ui.cropR], [crops[1], ui.cropL]]) {
     const ctx = canvas.getContext("2d");
     const img = ctx.createImageData(s, s);
     crop.forEach((v, k) => img.data.set([v, v, v, 255], 4 * k));
@@ -290,16 +314,24 @@ const tip = document.createElement("div");
 tip.className = "model-tip";
 document.body.append(tip);
 
+const tipStats = (m) => (m.mrl_test == null ? "" : `<ul>` +
+  `<li>MRL test (infrared): ${pct(m.mrl_test, 1)} · CEW test (normal camera): ${pct(m.cew_test, 1)}</li>` +
+  `<li>simulated webcam, all effects: ${pct(m.webcam_mrl, 1)} / ${pct(m.webcam_cew, 1)}</li>` +
+  `<li>${m.train_images.toLocaleString("en")} training eyes · ${m.params.toLocaleString("en")} parameters · ` +
+  `${m.train_minutes} min on an M4</li></ul>`);
+
 function buildModels() {
-  for (const m of MODELS) {
+  for (const m of state.models) {
     const chip = document.createElement("button");
     chip.className = "chip";
     chip.textContent = m.version;
+    chip.dataset.version = m.version;
     chip.setAttribute("role", "radio");
     chip.setAttribute("aria-checked", String(m.version === state.model));
     chip.disabled = !m.live;
+    chip.addEventListener("click", () => selectModel(m.version));
     chip.addEventListener("mouseenter", () => {
-      tip.innerHTML = `<b>${m.version}</b> · ${m.tagline}<ul>${m.changes.map((c) => `<li>${c}</li>`).join("")}</ul>`;
+      tip.innerHTML = `<b>${m.version}</b> · ${m.tagline}<ul>${m.changes.map((c) => `<li>${c}</li>`).join("")}</ul>` + tipStats(m);
       const r = chip.getBoundingClientRect();
       tip.style.left = `${Math.min(r.left, window.innerWidth - 340)}px`;
       tip.style.top = `${r.bottom + 8}px`;
@@ -310,9 +342,29 @@ function buildModels() {
   }
 }
 
+// rules: MediaPipe's blink scores decide; an eye model: its P(closed) decides. Same rules either way.
+async function selectModel(version) {
+  const m = state.models.find((x) => x.version === version);
+  ui.stats.textContent = `loading ${version}…`;
+  if (m.file) {
+    const session = await ort.InferenceSession.create(m.file, { executionProviders: ["wasm"] });
+    state.eyeModel = { ...m, session };
+  } else {
+    state.eyeModel = null;
+  }
+  state.model = version;
+  state.rules.reset();  // never mix closure signals from two models in one PERCLOS window
+  state.history = [];
+  state.inferMs = 0;
+  for (const chip of ui.models.children) chip.setAttribute("aria-checked", String(chip.dataset.version === version));
+  ui.stats.textContent = `${version} ready`;
+}
+
 // ---------------------------------------------------------------- start
 
 async function init() {
+  const manifest = await (await fetch("models/manifest.json")).json();
+  state.models = [RULES_MODEL, ...manifest.models.map((m) => ({ ...m, live: true })), ...COMING];
   buildModels();
   state.cropSpec = await (await fetch("eye_crop.json")).json();
   const vision = await FilesetResolver.forVisionTasks(MEDIAPIPE);
@@ -320,12 +372,12 @@ async function init() {
     baseOptions: { modelAssetPath: LANDMARKER_MODEL, delegate: "GPU" },
     runningMode: "VIDEO", numFaces: 1, outputFaceBlendshapes: true, outputFacialTransformationMatrixes: true,
   });
+  await selectModel(manifest.default);
   ui.camera.disabled = false;
-  ui.stats.textContent = "ready";
 }
 
 // For tests: feed a video URL and read the latest driver state.
-window.eyeTracker = { state, openVideoUrl: async (url) => openVideo(new File([await (await fetch(url)).blob()], "test.mp4", { type: "video/mp4" })) };
+window.eyeTracker = { state, selectModel, classifyEyes, extractEye, openVideoUrl: async (url) => openVideo(new File([await (await fetch(url)).blob()], "test.mp4", { type: "video/mp4" })) };
 
 init().catch((err) => {
   ui.stats.textContent = `error: ${err.message}`;
