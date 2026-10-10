@@ -5,13 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>eyeTracker · live</title>
 <meta name="description" content="Real-time driver monitoring (drowsiness and distraction) that runs entirely in your browser. Video never leaves your device.">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>👁️</text></svg>">
-<link rel="stylesheet" href="style.css?v=3">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='34' fill='none' stroke='%23161616' stroke-width='12'/><circle cx='50' cy='50' r='12' fill='%23ff5a1f'/></svg>">
+<link rel="stylesheet" href="style.css?v=4">
 </head>
 <body>
 <header class="top">
   <div class="brand">
-    <h1>eye<span>Tracker</span></h1>
+    <h1>eye<span>.</span>Tracker</h1>
     <p>Driver drowsiness and distraction monitoring · runs entirely in your browser</p>
   </div>
   <a class="gh" href="https://github.com/tegemenozyurek/eyeTracker" target="_blank" rel="noopener">GitHub ↗</a>
@@ -40,6 +40,7 @@
       <label class="btn" for="file">Use a video file</label>
       <input type="file" id="file" accept="video/*" hidden>
       <button id="recalibrate" class="btn" disabled>Recalibrate</button>
+      <button id="flash" class="btn" aria-pressed="false" title="Turn the screen into a white light around the image (F)">☀ Flash</button>
       <span class="spacer"></span>
       <label class="switch"><input type="checkbox" id="sound"><span></span>Sound</label>
       <label class="switch"><input type="checkbox" id="mesh" checked><span></span>Landmarks</label>
@@ -103,6 +104,8 @@
   <p class="note">The camera feed is processed only on this device. No image or video is uploaded or stored.</p>
 </footer>
 
-<script type="module" src="app.js?v=4"></script>
+<div class="flash-frame" id="flashFrame" hidden></div>
+
+<script type="module" src="app.js?v=5"></script>
 </body>
 </html>

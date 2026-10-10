@@ -244,7 +244,7 @@ function drawSpark() {
   ctx.setLineDash([3, 3]);
   ctx.beginPath(); ctx.moveTo(0, Y(RULES.closedBlink)); ctx.lineTo(w, Y(RULES.closedBlink)); ctx.stroke();
   ctx.setLineDash([]);
-  ctx.strokeStyle = "#8b5cf6";
+  ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue("--text").trim() || "#161616";
   ctx.lineWidth = 1.5;
   ctx.beginPath();
   let pen = false;
@@ -362,6 +362,19 @@ ui.camera.addEventListener("click", () => (state.stream ? stop() : startCamera()
 ui.file.addEventListener("change", () => openVideo(ui.file.files[0]));
 ui.recalibrate.addEventListener("click", () => { state.rules.reset(); state.history = []; });
 ui.showCrops.addEventListener("change", () => { ui.crops.hidden = !ui.showCrops.checked; });
+
+// Flash: the screen becomes a white light around the image, for a face in a dark room. F toggles it, Esc ends it.
+function setFlash(on) {
+  document.body.classList.toggle("flash", on);
+  $("flashFrame").hidden = !on;
+  $("flash").setAttribute("aria-pressed", String(on));
+}
+$("flash").addEventListener("click", () => setFlash(!document.body.classList.contains("flash")));
+document.addEventListener("keydown", (e) => {
+  if (e.target.closest?.("input, select, textarea")) return;
+  if (e.key === "f" || e.key === "F") setFlash(!document.body.classList.contains("flash"));
+  if (e.key === "Escape") setFlash(false);
+});
 
 // ---------------------------------------------------------------- model picker
 
