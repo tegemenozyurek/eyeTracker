@@ -1,120 +1,63 @@
-# 👁️ eyeTracker
+# Step 12: UTA-RLDD features and windows
 
-[![Python](https://img.shields.io/badge/python-3.12-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![PyTorch](https://img.shields.io/badge/PyTorch-2.x-EE4C2C?logo=pytorch&logoColor=white)](https://pytorch.org/)
-[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+> This branch is one step of **[eyeTracker](https://github.com/tegemenozyurek/eyeTracker)**, a real-time driver
+> monitoring system that runs in the browser. Every step of the project has its own branch, and its README explains
+> what was done in that step. The project overview is the README on [`main`](https://github.com/tegemenozyurek/eyeTracker).
+>
+> Previous: [Step 11: eye models in the browser](https://github.com/tegemenozyurek/eyeTracker/tree/step-11-onnx-demo) ·
+> Next: Step 13: train eyeTrack1
 
-**Real-time driver monitoring in the browser.** A normal webcam watches the driver's eyes, mouth and head and
-detects **drowsiness** (eye closure, PERCLOS, slow blinks, yawning, head nodding) and **distraction**
-(looking away from the road), with three alert levels: OK, Attention, Take a break.
+## What was done
 
-> **Work in progress.** Built step by step following [BRIEF.md](BRIEF.md). Plain-language notes for every
-> step are in [NOTES.md](NOTES.md). Results, the live demo link and charts will appear here as they are produced.
+[`scripts/prepare_rldd.py`](scripts/prepare_rldd.py) prepares UTA-RLDD for the temporal model `eyeTrack1`.
+No video and no face image is involved: the dataset version used here contains MediaPipe features only.
 
-## Planned models
+- **Frames:** the 168 videos that pass the dataset's quality check, halved from 10 to **5 frames per second**.
+- **13 features per frame**, all computable in the browser: eyeBlink, eyeSquint and eyeLookDown for each eye,
+  jawOpen, EAR per eye, MAR, pitch, yaw, roll. They are defined **exactly as in the dataset's extraction code**
+  (SleepDetective, branch `dataset-release`, `src/extract.py`), because Step 14 must compute the same numbers live:
+  - head pose uses the same formulas as the demo already does (pitch = atan2(r21, r22), yaw = atan2(-r20, ...),
+    roll = atan2(r10, r00) from the facial transformation matrix);
+  - EAR and MAR are 3D distances between MediaPipe's normalized landmarks (the demo's pixel EAR differs and will be
+    replaced for `eyeTrack1` in Step 14).
+- **Windows:** 60 s = 300 frames, a new window every 10 s, kept when the face was found in at least 70% of the frames.
+  Each window takes its video's label: alert, low vigilant or drowsy (the drivers' own self-report).
+- **Folds:** the authors' 5 folds of 12 people, so no person is ever in two folds.
+- **The rules baseline on the same windows:** every video is replayed through the demo's own
+  [`web/rules.js`](web/rules.js) ([`tools/rules_on_rldd.mjs`](tools/rules_on_rldd.mjs)), frame by frame as it would run
+  live, with head pose held at 0 so only drowsiness is judged. Its level and PERCLOS at the end of every window are
+  saved for Step 13.
 
-| version | what it is | trained on |
-|---|---|---|
-| `rules` | reference baseline, no learning: eye aspect ratio, PERCLOS, yawn and head-pose thresholds | nothing |
-| `eyeTrack0.1` | small CNN, eye crop → open / closed | MRL Eye Dataset (infrared) |
-| `eyeTrack0.5` | same CNN family + eyes from normal cameras, MediaPipe-aligned crops, webcam augmentations | MRL Eye + CEW |
-| `eyeTrack1` | temporal model over per-frame features → alert / low vigilant / drowsy | UTA-RLDD (MediaPipe features, no video) |
+## Why
 
-## Results so far
+Drowsiness is a pattern over time, not a single closed eye. A temporal model needs fixed-length sequences, honest
+person-wise folds, and a fair baseline computed on exactly the same windows.
 
-| model | MRL test (infrared) | CEW test (normal camera) | simulated webcam, MRL / CEW | training time |
-|---|---:|---:|---:|---:|
-| `eyeTrack0.1` | 97.8% | 89.3% | 60.6% / 56.3% | 7.8 min |
-| **`eyeTrack0.5`** | **98.1%** | **96.7%** | **78.2% / 84.7%** | 8.2 min |
+## Results
 
-Test people never appear in training. `eyeTrack0.5` trains with webcam-style augmentation, which uses the same kinds of effects as the simulated-webcam test, so it is prepared for that test by design. Full table: [`models/eye_models_comparison.txt`](models/eye_models_comparison.txt).
-
-![Eye models](assets/eye_models_comparison.png)
-
-**On real faces through the full live pipeline** (MediaPipe → aligned eye crop → model; 716 eyes of test people, [`check_live_pipeline.py`](scripts/check_live_pipeline.py)):
-
-| method | accuracy | closed eyes caught |
-|---|---:|---:|
-| `rules` (MediaPipe blink score) | 89.5% | 79.9% |
-| `eyeTrack0.1` | 91.5% | 89.8% |
-| **`eyeTrack0.5`** | **96.5%** | **95.5%** |
-
-## How it was built, step by step
-
-Every step has its own branch whose README explains what was done in that step, why, and its results.
-Each branch is merged into `main` and kept.
-
-| step | branch |
+| | |
 |---|---|
-| 1. Project skeleton, environment check | [`step-01-project-skeleton`](https://github.com/tegemenozyurek/eyeTracker/tree/step-01-project-skeleton) |
-| 2. Training monitor | [`step-02-training-monitor`](https://github.com/tegemenozyurek/eyeTracker/tree/step-02-training-monitor) |
-| 3. Download the data (1.76 GB) | [`step-03-download-data`](https://github.com/tegemenozyurek/eyeTracker/tree/step-03-download-data) |
-| 4. Explore the data: person and camera biases, drowsiness signal strength | [`step-04-explore-data`](https://github.com/tegemenozyurek/eyeTracker/tree/step-04-explore-data) |
-| 5. 32x32 eye crops, subject-wise splits (no person in two splits) | [`step-05-eye-crops-splits`](https://github.com/tegemenozyurek/eyeTracker/tree/step-05-eye-crops-splits) |
-| 6. Eye CNN: 295,266 parameters, 0.75 ms for both eyes on CPU | [`step-06-define-cnn`](https://github.com/tegemenozyurek/eyeTracker/tree/step-06-define-cnn) |
-| 7. Train `eyeTrack0.1`: 97.8% MRL test, 89.3% CEW test, 60.6% simulated webcam | [`step-07-train-eyetrack01`](https://github.com/tegemenozyurek/eyeTracker/tree/step-07-train-eyetrack01) |
-| 8. Web demo with the `rules` baseline: PERCLOS, microsleeps, yawns, eyes off the road | [`step-08-web-demo-rules`](https://github.com/tegemenozyurek/eyeTracker/tree/step-08-web-demo-rules) |
-| 9. One eye crop in Python and JavaScript: parity-tested, calibrated on CEW | [`step-09-eye-crop-parity`](https://github.com/tegemenozyurek/eyeTracker/tree/step-09-eye-crop-parity) |
-| 10. Train `eyeTrack0.5`: CEW 96.7%, simulated webcam 78.2% / 84.7% | [`step-10-train-eyetrack05`](https://github.com/tegemenozyurek/eyeTracker/tree/step-10-train-eyetrack05) |
-| 11. Eye models in the browser (ONNX); live pipeline on real test faces: 96.5% | [`step-11-onnx-demo`](https://github.com/tegemenozyurek/eyeTracker/tree/step-11-onnx-demo) |
+| videos | 168 from 60 people, 526,983 frames at 5 fps (29.3 h); face found in 93.9% of frames |
+| windows | 8,817 of 60 s (811 of 9,628 positions dropped for too few faces) |
+| per fold | 1,516 to 1,860 windows, 12 people each; people in more than one fold: **0** |
 
-## Project layout
+![Windows per fold](assets/rldd/windows.png)
 
-```
-src/               shared code: models, eye alignment, augmentation, features
-scripts/           one script per step; each prints its results and saves a chart
-tools/monitor/     live dashboard for training runs and long jobs
-models/<version>/  weights, config, training log, test report
-assets/<version>/  charts
-web/               browser demo
-data/              datasets (git-ignored, downloaded by scripts)
-runs/<version>/    live metrics read by the monitor (git-ignored)
-```
+**The rules baseline, replayed on every window:**
 
-## Setup
+| true class | median PERCLOS | rules: OK | Attention | Take a break |
+|---|---:|---:|---:|---:|
+| alert | 1.7% | 80.5% | 11.2% | 8.3% |
+| low vigilant | 4.0% | 69.1% | 18.0% | 12.9% |
+| drowsy | 8.3% | 44.2% | 19.5% | 36.4% |
+
+![Rules by class](assets/rldd/rules_by_class.png)
+
+PERCLOS rises with drowsiness, but the rules say "OK" for 44.2% of the drowsy windows: the bar `eyeTrack1` has to clear.
+
+## Try it
 
 ```bash
-python3.12 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-python scripts/check_env.py
+git checkout step-12-rldd-features
+python scripts/prepare_rldd.py      # about 4 seconds; needs data/rldd from Step 3 and Node.js for the rules replay
 ```
-
-### Run the demo locally
-
-```bash
-python3 -m http.server -d web 8010     # then open http://localhost:8010
-```
-
-Everything runs in the browser; the camera feed never leaves the device.
-
-### Get the data
-
-```bash
-python scripts/download_data.py     # MRL Eye, CEW, UTA-RLDD features: 1.76 GB, needs a Kaggle token
-python scripts/clean_data.py        # disk use per dataset; delete the ones you no longer need
-```
-
-### Watch training live
-
-```bash
-python tools/monitor/app.py        # opens http://127.0.0.1:8501
-```
-
-Every training run and long job writes its progress to `runs/<name>/metrics.jsonl`; the monitor shows live loss and
-accuracy curves, ETA, an overfitting warning, per-class precision/recall, the confusion matrix, sample predictions,
-progress bars for long jobs, a run comparison and a Stop button. Try it without any data:
-`python tools/monitor/dummy_run.py`.
-
-## Data
-
-| dataset | used by | what it is |
-|---|---|---|
-| [MRL Eye](http://mrl.cs.vsb.cz/eyedataset) | `eyeTrack0.1`, `eyeTrack0.5` | 84,898 infrared eye crops from 37 people, open / closed |
-| [CEW](https://parnec.nuaa.edu.cn/_upload/tpl/02/db/731/template731/pages/xtan/ClosedEyeDatabases.html) | `eyeTrack0.5` | 4,846 eye patches from normal-camera photos, open / closed |
-| [UTA-RLDD](https://sites.google.com/view/utarldd/home) | `eyeTrack1` | 60 drivers, alert / low vigilant / drowsy; used as MediaPipe features (1,115,058 frames, no images) from [UTA-RLDD Face Features](https://www.kaggle.com/datasets/abdulrahmankhengari/uta-rldd-face-features) |
-
-No face from UTA-RLDD is ever shown in this project: the version used here contains numbers only.
-
-## License
-
-Code is released under the [MIT License](LICENSE). Datasets belong to their creators and are not redistributed here.
