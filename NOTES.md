@@ -231,3 +231,30 @@ PERCLOS per window rises from 1.7% (alert) to 4.0% (low vigilant) and 8.3% (drow
 
 **Window, in one sentence:** a fixed stretch of time (here 60 seconds of frames) that the model looks at as a whole,
 because drowsiness shows in how the eyes and head behave over time, not in a single frame.
+
+## Step 13: train eyeTrack1
+
+`eyeTrack1` is a small recurrent network (a GRU, 3,699 parameters, [`src/temporal.py`](src/temporal.py)) that reads one
+minute of the 13 face features, frame by frame, and says alert, low vigilant or drowsy. It was tested with 5-fold
+cross-validation ([`train_eyetrack1.py`](scripts/train_eyetrack1.py)): each fold's 12 people are judged by a model
+that never saw them, so all 60 drivers are tested once.
+
+**What happened, honestly.** The first, larger model memorized the drivers: 98.6% right on its 36 training people,
+32.7% (chance) on new ones. Each driver has exactly one video per class, so the network learned "this face, in
+this video" instead of drowsiness. A much smaller network with strong regularization and a trick that simulates new
+drivers (every training window gets a random shift and scale of each feature) helped; the settings were chosen on the
+validation folds only ([`selection.txt`](models/eyeTrack1/selection.txt)). The result on the test people is
+**sobering**: 44.4% window accuracy over three classes (chance 33.3%), against 44.8% for the demo's rules and 48.1%
+for a single PERCLOS threshold pair fitted on the training folds; alert vs drowsy 66.8% against 68.7% for the rules.
+The dataset's authors report 54% per blink sequence and 65.2% per video with blink features (Ghoddoosian et al.
+2019, Table 2); `eyeTrack1` is clearly below that. With 36 training people, a learned model cannot yet beat a
+well-chosen PERCLOS threshold on new drivers.
+
+**What does help** (an analysis, not usable in the demo): comparing each driver with their own average across all
+their recordings lifts the same network to 49.7% (3 classes) and 72.4% (alert vs drowsy), above every rule. Step 4
+had already shown why: differences between people are larger than differences between alert and drowsy in one
+person. A real car could learn the driver's personal baseline over many drives; this demo cannot.
+
+**Cross-validation, in one sentence:** split the people into five groups, train five times, each time testing on the
+group left out, so every person is tested once by a model that never saw them and the result does not depend on one
+lucky split.
