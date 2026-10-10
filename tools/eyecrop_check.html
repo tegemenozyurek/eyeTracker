@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Eye-crop check: browser vs Python</title>
+<style>
+  body { font: 14px/1.5 system-ui, sans-serif; margin: 32px; background: #0f172a; color: #e2e8f0; }
+  pre { background: #111827; padding: 14px; border-radius: 10px; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<h2>Eye crop on real faces: browser pipeline vs Python pipeline</h2>
+<p>Run <code>python scripts/eye_crop_realface.py</code> first, and serve the repo root
+(<code>python -m http.server 8020</code>). Each LFW face is cropped here with MediaPipe for the web and
+<code>web/eyecrop.js</code>, and compared with the Python crops.</p>
+<pre id="out">running…</pre>
+
+<script type="module">
+import { FaceLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.1.0/vision_bundle.mjs";
+import { CORNERS, eyeCrop, toGray } from "../web/eyecrop.js";
+
+const out = document.getElementById("out");
+const py = await (await fetch("../runs/_eyecrop_check/python.json")).json();
+const vision = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.1.0/wasm");
+const landmarker = await FaceLandmarker.createFromOptions(vision, {
+  baseOptions: { modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task" },
+  runningMode: "IMAGE", numFaces: 1,
+});
+
+const mean = (a) => a.reduce((s, v) => s + v, 0) / a.length;
+const ncc = (a, b) => {
+  const ma = mean(a), mb = mean(b);
+  let n = 0, da = 0, db = 0;
+  for (let i = 0; i < a.length; i++) { n += (a[i] - ma) * (b[i] - mb); da += (a[i] - ma) ** 2; db += (b[i] - mb) ** 2; }
+  return n / Math.sqrt(da * db);
+};
+const rows = { decode: [], decodeMax: [], shift: [], diff: [], ncc: [] };
+for (const face of py.faces) {
+  const img = new Image();
+  img.src = `../${face.photo}`;
+  await img.decode();
+  const c = document.createElement("canvas");
+  c.width = img.width;
+  c.height = img.height;
+  const ctx = c.getContext("2d");
+  ctx.drawImage(img, 0, 0);
+  const gray = toGray(ctx.getImageData(0, 0, c.width, c.height).data, c.width, c.height);
+  const res = landmarker.detect(img);
+  if (!res.faceLandmarks.length) continue;
+  const pts = res.faceLandmarks[0].map((p) => [p.x * img.width, p.y * img.height]);
+  for (const eye of ["right", "left"]) {
+    const p = face.eyes[eye];
+    // 1) same corners as Python: only the JPEG decoding can differ
+    const same = eyeCrop(gray, c.width, c.height, p.corners[0], p.corners[1], py.spec);
+    const d = Array.from(same, (v, k) => Math.abs(v - p.crop[k]));
+    rows.decode.push(mean(d));
+    rows.decodeMax.push(Math.max(...d));
+    // 2) the browser's own landmarks: the full live pipeline
+    const [i, j] = CORNERS[eye];
+    const own = eyeCrop(gray, c.width, c.height, pts[i], pts[j], py.spec);
+    rows.shift.push(Math.max(Math.hypot(pts[i][0] - p.corners[0][0], pts[i][1] - p.corners[0][1]),
+      Math.hypot(pts[j][0] - p.corners[1][0], pts[j][1] - p.corners[1][1])));
+    rows.diff.push(mean(Array.from(own, (v, k) => Math.abs(v - p.crop[k]))));
+    rows.ncc.push(ncc(Array.from(own), p.crop));
+  }
+}
+const med = (a) => [...a].sort((x, y) => x - y)[Math.floor(a.length / 2)];
+out.textContent = [
+  `${rows.ncc.length} eyes from ${py.faces.length} LFW faces`,
+  ``,
+  `Same corners, browser vs Python image decoding:`,
+  `  mean difference ${mean(rows.decode).toFixed(3)} gray levels, largest single pixel ${Math.max(...rows.decodeMax).toFixed(2)} (of 255)`,
+  ``,
+  `Full pipeline, each with its own MediaPipe landmarks:`,
+  `  eye corners apart: median ${med(rows.shift).toFixed(2)} px, largest ${Math.max(...rows.shift).toFixed(2)} px`,
+  `  crop difference: mean ${mean(rows.diff).toFixed(2)} gray levels`,
+  `  similarity (normalized correlation): median ${med(rows.ncc).toFixed(3)}, lowest ${Math.min(...rows.ncc).toFixed(3)}`,
+].join("\n");
+window.result = out.textContent;
+</script>
+</body>
+</html>
