@@ -294,3 +294,17 @@ second, more than a webcam delivers. The page was not visible on screen during t
 down, so these numbers are if anything pessimistic. The README header image ([`showcase.png`](assets/showcase.png))
 shows 16 random eyes of test people with `eyeTrack0.5`'s answer; it got all 16 right, which at 96.7 to 98.1% accuracy is
 a likely but slightly lucky draw.
+
+## Step 16: final README and cleanup
+
+The [README](README.md) is now the project's front page, in the style of emotionDetecter: what it does, how to run it,
+the results of every model next to each other, what changed between the models, how it was built step by step (with
+a link to each step's branch), how to retrain everything, honest limitations and the data credits. Every number in it
+comes from a report a script wrote. The cleanup removed two packages from the requirements that the code no longer
+used (the downloads stream from the Kaggle API directly), and checked that every Python file compiles, all JavaScript
+tests pass, and the repository holds no data, secrets or test leftovers (115 files, 9.3 MB of history). The live
+GitHub Pages site is left for later, by choice.
+
+**The project in one sentence:** a driver-monitoring demo that runs entirely in the browser, where the eye model
+measurably closes the gap from infrared training data to a webcam, and the drowsiness model honestly shows that, with
+60 drivers, learning does not yet beat a well-chosen classic rule.
