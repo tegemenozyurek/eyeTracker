@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>eyeTracker browser benchmark</title>
+<style>
+  body { font: 14px/1.5 system-ui, sans-serif; margin: 32px; background: #0b0c0e; color: #eef1f4; }
+  pre { background: #141619; padding: 14px; border-radius: 10px; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<h2>eyeTracker: time per frame in this browser</h2>
+<p>Started by <code>python scripts/browser_benchmark.py</code>. Keep this tab visible: hidden tabs are slowed down by the browser.</p>
+<pre id="out">loading models…</pre>
+
+<script type="module">
+import { FaceLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.1.0/vision_bundle.mjs";
+import * as ort from "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.30.0/dist/ort.wasm.min.mjs";
+import { CORNERS, cropBox, eyeCrop, toGray } from "../web/eyecrop.js";
+import { frameFeatures } from "../web/features.js";
+import { DriverRules } from "../web/rules.js";
+
+ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.30.0/dist/";
+const out = document.getElementById("out");
+const PHOTOS = ["Al_Gore/Al_Gore_0001.jpg", "Adam_Sandler/Adam_Sandler_0001.jpg", "Alan_Greenspan/Alan_Greenspan_0001.jpg",
+  "Albert_Costa/Albert_Costa_0001.jpg", "Alejandro_Toledo/Alejandro_Toledo_0001.jpg", "Abdullah_Gul/Abdullah_Gul_0001.jpg",
+  "Aaron_Peirsol/Aaron_Peirsol_0001.jpg", "Ali_Naimi/Ali_Naimi_0001.jpg"];
+const ROUNDS = 25;  // every photo is used ROUNDS times as a video frame
+const median = (a) => { const s = [...a].sort((x, y) => x - y); return s[Math.floor(s.length / 2)]; };
+
+const manifest = await (await fetch("../web/models/manifest.json")).json();
+const spec = await (await fetch("../web/eye_crop.json")).json();
+const vision = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.1.0/wasm");
+const landmarker = await FaceLandmarker.createFromOptions(vision, {
+  baseOptions: { modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task", delegate: "GPU" },
+  runningMode: "VIDEO", numFaces: 1, outputFaceBlendshapes: true, outputFacialTransformationMatrixes: true,
+});
+const sessions = {};
+for (const m of manifest.models) sessions[m.version] = { m, s: await ort.InferenceSession.create(`../web/${m.file}`, { executionProviders: ["wasm"] }) };
+
+// frames: LFW photos upscaled to 640x480 like a webcam image
+const frames = [];
+for (const p of PHOTOS) {
+  const bmp = await createImageBitmap(await (await fetch(`../data/lfw/lfw-deepfunneled/lfw-deepfunneled/${p}`)).blob());
+  const c = document.createElement("canvas");
+  c.width = 640; c.height = 480;
+  const ctx = c.getContext("2d");
+  ctx.fillStyle = "#777"; ctx.fillRect(0, 0, 640, 480);
+  ctx.drawImage(bmp, 140, 60, 360, 360);
+  frames.push(c);
+}
+out.textContent = "measuring…";
+
+const t = { "MediaPipe face landmarker": [], "two aligned eye crops": [], "13 eyeTrack1 features": [], "rules": [] };
+for (const v of ["eyeTrack0.1", "eyeTrack0.5"]) t[`${v} (both eyes)`] = [];
+const rules = new DriverRules();
+const work = document.createElement("canvas");
+const wctx = work.getContext("2d", { willReadFrequently: true });
+let ts = 0, n = 0;
+for (let r = 0; r < ROUNDS + 2; r++) {
+  for (const frame of frames) {
+    const warm = r < 2;  // the first rounds only warm up (shader compilation, WASM start-up)
+    let a = performance.now();
+    const res = landmarker.detectForVideo(frame, (ts += 33));
+    const lmMs = performance.now() - a;
+    if (!res.faceLandmarks.length) continue;
+    const lm = res.faceLandmarks[0], pts = lm.map((p) => [p.x * 640, p.y * 480]);
+    a = performance.now();
+    const crops = ["right", "left"].map((eye) => {
+      const [i, j] = CORNERS[eye];
+      let [x0, y0, x1, y1] = cropBox(pts[i], pts[j], spec);
+      x0 = Math.max(0, x0); y0 = Math.max(0, y0); x1 = Math.min(640, x1); y1 = Math.min(480, y1);
+      const w = x1 - x0, h = y1 - y0;
+      work.width = w; work.height = h;
+      wctx.drawImage(frame, x0, y0, w, h, 0, 0, w, h);
+      return eyeCrop(toGray(wctx.getImageData(0, 0, w, h).data, w, h), w, h, [pts[i][0] - x0, pts[i][1] - y0], [pts[j][0] - x0, pts[j][1] - y0], spec);
+    });
+    const cropMs = performance.now() - a;
+    const eyeMs = {};
+    for (const v of ["eyeTrack0.1", "eyeTrack0.5"]) {
+      const { m, s } = sessions[v];
+      const data = new Float32Array(2 * 1024);
+      crops.forEach((c, k) => { for (let q = 0; q < 1024; q++) data[k * 1024 + q] = (c[q] / 255 - m.mean) / m.std; });
+      a = performance.now();
+      await s.run({ input: new ort.Tensor("float32", data, [2, 1, 32, 32]) });
+      eyeMs[v] = performance.now() - a;
+    }
+    const bs = Object.fromEntries(res.faceBlendshapes[0].categories.map((c) => [c.categoryName, c.score]));
+    a = performance.now();
+    frameFeatures(lm, bs, res.facialTransformationMatrixes[0].data);
+    const featMs = performance.now() - a;
+    a = performance.now();
+    rules.update({ t: ts / 1000, face: true, blinkL: bs.eyeBlinkLeft, blinkR: bs.eyeBlinkRight, jawOpen: bs.jawOpen, yaw: 0, pitch: 0, roll: 0 });
+    const rulesMs = performance.now() - a;
+    if (warm) continue;
+    n++;
+    t["MediaPipe face landmarker"].push(lmMs);
+    t["two aligned eye crops"].push(cropMs);
+    t["eyeTrack0.1 (both eyes)"].push(eyeMs["eyeTrack0.1"]);
+    t["eyeTrack0.5 (both eyes)"].push(eyeMs["eyeTrack0.5"]);
+    t["13 eyeTrack1 features"].push(featMs);
+    t["rules"].push(rulesMs);
+  }
+}
+// eyeTrack1: one full 60 s window (300 x 14), as the demo runs it every 2 s
+const T = sessions.eyeTrack1;
+const win = new ort.Tensor("float32", new Float32Array(T.m.window * (T.m.features.length + 1)), [1, T.m.window, T.m.features.length + 1]);
+for (let i = 0; i < 3; i++) await T.s.run({ input: win });
+const winMs = [];
+for (let i = 0; i < 30; i++) { const a = performance.now(); await T.s.run({ input: win }); winMs.push(performance.now() - a); }
+
+const perFrame = Object.fromEntries(Object.entries(t).map(([k, v]) => [k, +median(v).toFixed(3)]));
+const total = perFrame["MediaPipe face landmarker"] + perFrame["two aligned eye crops"] + perFrame["eyeTrack0.5 (both eyes)"]
+  + perFrame["13 eyeTrack1 features"] + perFrame["rules"];
+const ua = navigator.userAgent;
+const browser = (ua.match(/(Edg|Chrome|Firefox|Version)\/[\d.]+/) || [ua])[0].replace("Version", "Safari");
+const result = { browser, user_agent: ua, cores: navigator.hardwareConcurrency, visible: document.visibilityState === "visible",
+  photos: PHOTOS.length, frames: n, per_frame_ms: perFrame, eyetrack1_window_ms: +median(winMs).toFixed(3),
+  total_ms_eyetrack05: +total.toFixed(3), mediapipe_delegate: "GPU", onnx_backend: "wasm", date: new Date().toISOString() };
+await fetch("/results", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(result) });
+out.textContent = JSON.stringify(result, null, 2);
+window.result = result;
+</script>
+</body>
+</html>

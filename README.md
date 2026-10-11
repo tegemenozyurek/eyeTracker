@@ -69,6 +69,7 @@ Each branch is merged into `main` and kept.
 | 12. UTA-RLDD: 8,817 windows of 60 s, 5 person-wise folds, rules replayed on every window | [`step-12-rldd-features`](https://github.com/tegemenozyurek/eyeTracker/tree/step-12-rldd-features) |
 | 13. Train `eyeTrack1` (GRU, 5-fold CV): 44.4% on new drivers, level with the rules | [`step-13-train-eyetrack1`](https://github.com/tegemenozyurek/eyeTracker/tree/step-13-train-eyetrack1) |
 | 14. `eyeTrack1` in the demo, live features checked against training; responsive redesign | [`step-14-eyetrack1-demo`](https://github.com/tegemenozyurek/eyeTracker/tree/step-14-eyetrack1-demo) |
+| 15. Benchmark of all models, browser speed (13.6 ms per frame), showcase | [`step-15-benchmark`](https://github.com/tegemenozyurek/eyeTracker/tree/step-15-benchmark) |
 
 ## Project layout
 

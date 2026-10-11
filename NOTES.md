@@ -276,3 +276,21 @@ UTA-RLDD windows, within 1.25e-7 ([`tools/onnx_check.html`](tools/onnx_check.htm
 
 **Feature parity, in one sentence:** making sure the numbers a model receives live are computed exactly like the ones
 it was trained on, because a model can only be as right as its inputs are faithful.
+
+## Step 15: benchmark and charts
+
+All results are now in one place, [`models/benchmark.txt`](models/benchmark.txt) and
+[`assets/benchmark.png`](assets/benchmark.png), produced by [`benchmark.py`](scripts/benchmark.py) from the reports the
+earlier steps wrote, so no number is typed by hand. For the eyes, `eyeTrack0.5` is the clear winner: on real face
+photos through the whole live pipeline it gets 96.5% of eyes right and catches 95.5% of closed eyes, against 89.5% and
+79.9% for the rules. For drowsiness, no learned model beats a well-chosen PERCLOS threshold on new drivers; only the
+personal-baseline analysis does.
+
+Speed was measured in a real browser ([`browser_benchmark.py`](scripts/browser_benchmark.py) with
+[`tools/benchmark.html`](tools/benchmark.html), median of 200 frames in Chrome on the M4): MediaPipe's face landmarker
+takes 8.5 ms, the two eye crops 2.0 ms, `eyeTrack0.5` 3.1 ms for both eyes, the features and rules less than 0.1 ms,
+and `eyeTrack1` 0.2 ms for a full minute. One frame takes 13.6 ms, so the pipeline could handle about 74 frames per
+second, more than a webcam delivers. The page was not visible on screen during the run, which only slows a browser
+down, so these numbers are if anything pessimistic. The README header image ([`showcase.png`](assets/showcase.png))
+shows 16 random eyes of test people with `eyeTrack0.5`'s answer; it got all 16 right, which at 96.7 to 98.1% accuracy is
+a likely but slightly lucky draw.
