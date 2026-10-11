@@ -13,8 +13,9 @@ function drive(rules, seconds, frame = () => ({}), start = rules.lastT ?? 0) {
   }
   return state;
 }
-// A normal blink: eyes closed for 0.2 s every 4 s.
-const blinking = (t) => (t % 4 < 0.2 ? { blinkL: 0.8, blinkR: 0.8 } : {});
+// A normal blink: the eyeBlink score is above 0.5 for 0.1 s every 4 s, PERCLOS 2.5% (alert drivers in UTA-RLDD:
+// median 1.7%, Step 12).
+const blinking = (t) => (t % 4 < 0.1 ? { blinkL: 0.8, blinkR: 0.8 } : {});
 
 const results = [];
 function test(name, fn) {
@@ -23,11 +24,11 @@ function test(name, fn) {
   console.log(`  ok  ${name}`);
 }
 
-test("alert driver blinking normally stays OK, PERCLOS about 5%", () => {
+test("alert driver blinking normally stays OK, PERCLOS about 2.5%", () => {
   const r = new DriverRules();
   const s = drive(r, 120, blinking);
   assert.equal(s.levelName, "OK");
-  assert.ok(Math.abs(s.perclos - 0.05) < 0.01, `perclos ${s.perclos}`);
+  assert.ok(Math.abs(s.perclos - 0.025) < 0.01, `perclos ${s.perclos}`);
   assert.equal(s.blinks, 30);
 });
 
@@ -44,7 +45,7 @@ test("the alert stays up for the hold time after eyes open again (no flicker), t
   drive(r, 30, blinking);
   drive(r, 2, () => ({ blinkL: 0.9, blinkR: 0.9 }));
   assert.equal(drive(r, RULES.holdS - 1).levelName, "Take a break");
-  // Down one level, not to OK: the 2 s closure itself pushed the last minute's PERCLOS above 7.5%.
+  // Down one level, not to OK: the 2 s closure itself pushed the last minute's PERCLOS above 4.5%.
   const s = drive(r, 3);
   assert.equal(s.levelName, "Attention");
   assert.ok(s.reasons.some((x) => x.startsWith("PERCLOS")));

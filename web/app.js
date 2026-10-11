@@ -454,6 +454,12 @@ async function init() {
   state.models = [RULES_MODEL, ...manifest.models.map((m) => ({ ...m, live: true })), ...COMING];
   buildModels();
   state.cropSpec = await (await fetch("eye_crop.json")).json();
+  // gauge threshold marks from the rules themselves (PERCLOS scale 0-30%, eyes-off-road scale 0-5 s)
+  const mark = (sel, share) => { document.querySelector(sel).style.strokeDasharray = `0 ${(share * 100).toFixed(1)} 0.9 100`; };
+  mark(".tick.a", RULES.perclosAttention / 0.3);
+  mark(".tick.b", RULES.perclosBreak / 0.3);
+  mark(".tick.c", RULES.offRoadAttentionS / 5);
+  mark(".tick.d", RULES.offRoadBreakS / 5);
   const vision = await FilesetResolver.forVisionTasks(MEDIAPIPE);
   state.landmarker = await FaceLandmarker.createFromOptions(vision, {
     baseOptions: { modelAssetPath: LANDMARKER_MODEL, delegate: "GPU" },

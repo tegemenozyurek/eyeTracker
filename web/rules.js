@@ -1,15 +1,16 @@
 // The `rules` baseline: classic driver-monitoring rules on MediaPipe's per-frame face signals.
 // No learning. Pure logic (no DOM), so it can be tested in Node with synthetic frames (web/rules.test.mjs).
 //
-// Every threshold is in RULES below. They are provisional, informed by Step 4 (median PERCLOS per video:
-// alert 2.2%, drowsy 9.8%); Steps 12-13 tune and evaluate them on UTA-RLDD.
+// Every threshold is in RULES below. The PERCLOS pair was learned from UTA-RLDD (scripts/tune_rules.py): the best
+// 3-class macro F1 with at least 70% of alert windows left "OK", cross-validated on drivers never seen (44.7% macro F1
+// vs 39.8% for the first hand-set 7.5% / 15%), then fitted once on all 60 drivers.
 
 export const RULES = {
   closedBlink: 0.5,        // eye counts as closed when MediaPipe's eyeBlink score is at least this (as in the RLDD features)
   perclosWindowS: 60,      // PERCLOS = share of time with closed eyes over the last 60 s
   perclosMinS: 20,         // judge PERCLOS only once this much time has been observed
-  perclosAttention: 0.075, // PERCLOS levels for Attention / Take a break
-  perclosBreak: 0.15,
+  perclosAttention: 0.045, // PERCLOS levels for Attention / Take a break (scripts/tune_rules.py)
+  perclosBreak: 0.115,
   longClosureS: 1.5,       // one closure this long (a microsleep) means Take a break at once
   yawnJaw: 0.5,            // jawOpen above this ...
   yawnMinS: 1.5,           // ... for this long counts as a yawn
