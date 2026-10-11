@@ -149,7 +149,7 @@ python scripts/benchmark.py && python scripts/make_showcase.py
 - **`eyeTrack1` is not better than the rules on new drivers** (44.4% vs 44.8%, 3 classes). Differences between people
   are larger than the differences between alert and drowsy in one person; a personal baseline would help, but needs
   several sessions of the same driver.
-- **Drowsiness labels are self-reported** for whole videos (median 10.2 minutes), so a "drowsy" video can contain alert minutes. The
+- **Drowsiness labels are self-reported** for whole videos (median 10.1 to 10.2 minutes per class), so a "drowsy" video can contain alert minutes. The
   RLDD features were extracted by a third party, not by the dataset's authors; the live features follow their code.
 - **No live, labelled webcam evaluation.** The webcam results are a simulation and face photos; the demo has not been
   tested on recorded drives or in a car.
