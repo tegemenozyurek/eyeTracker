@@ -18,7 +18,7 @@ import torch
 from torch import nn
 
 ROOT = Path(__file__).resolve().parent.parent
-PACKAGES = ["torch", "numpy", "matplotlib", "PIL", "cv2", "mediapipe", "onnx", "onnxruntime", "kagglehub"]
+PACKAGES = ["torch", "numpy", "matplotlib", "PIL", "mediapipe", "onnx", "onnxruntime", "pyarrow"]
 KAGGLE_TOKENS = [Path.home() / ".kaggle" / "access_token", Path.home() / ".kaggle" / "kaggle.json"]
 
 
