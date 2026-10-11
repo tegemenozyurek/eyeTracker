@@ -3,6 +3,7 @@
 import { FaceLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.1.0/vision_bundle.mjs";
 import { DriverRules, RULES } from "./rules.js";
 import { CORNERS, cropBox, eyeCrop, toGray } from "./eyecrop.js";
+import { frameFeatures } from "./features.js";
 import * as ort from "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.30.0/dist/ort.wasm.min.mjs";
 
 ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.30.0/dist/";
@@ -22,17 +23,17 @@ const LIPS = [61, 185, 40, 39, 37, 0, 267, 269, 270, 409, 291, 375, 321, 405, 31
 const RULES_MODEL = { version: "rules", live: true, tagline: "Baseline, no learning",
   changes: ["Eye closed when MediaPipe's eyeBlink score ≥ 0.5", "PERCLOS over 60 s, long closures, yawns",
             "Head pose vs a calibrated road direction"] };
-const COMING = [{ version: "eyeTrack1", live: false, tagline: "Temporal drowsiness model (Step 13)",
-  changes: ["Arrives in the demo in Step 14"] }];
+const COMING = [];
 
 const $ = (id) => document.getElementById(id);
 const ui = Object.fromEntries(["video", "overlay", "viewport", "empty", "banner", "camera", "file", "recalibrate", "sound",
   "mesh", "showCrops", "stats", "models", "state", "stateLabel", "stateSub", "eyeL", "eyeR", "eyeLBar", "eyeRBar",
-  "blinks", "blinkInfo", "yawns", "yawnInfo", "perclos", "perclosBar", "perclosInfo", "pose", "poseInfo", "offroad",
-  "offroadInfo", "spark", "crops", "cropL", "cropR"].map((id) => [id, $(id)]));
+  "blinks", "blinkInfo", "yawns", "yawnInfo", "perclos", "perclosArc", "perclosInfo", "pose", "poseInfo", "offroad",
+  "offroadArc", "offroadInfo", "spark", "crops", "cropL", "cropR", "temporal", "temporalInfo", "temporalBars", "app"].map((id) => [id, $(id)]));
 
 const state = { landmarker: null, rules: new DriverRules(), source: null, stream: null, loopId: 0, mirrored: true,
-  fps: 0, lastFrame: 0, detectMs: 0, history: [], lastLevel: 0, model: "rules", eyeModel: null, inferMs: 0, models: [] };
+  fps: 0, lastFrame: 0, detectMs: 0, history: [], lastLevel: 0, model: "rules", eyeModel: null, inferMs: 0, models: [],
+  temporal: null };
 
 // ---------------------------------------------------------------- per-frame signals
 
@@ -63,8 +64,10 @@ function signals(result, width, height, t) {
   const pose = result.facialTransformationMatrixes?.[0] ? headPose(result.facialTransformationMatrixes[0].data) : { pitch: 0, yaw: 0, roll: 0 };
   // blinkL / blinkR are the eye-closure scores the rules use: MediaPipe's blendshapes, or an eye model's
   // probability of "closed" when one is selected (see classifyEyes).
+  const matrix = result.facialTransformationMatrixes?.[0]?.data;
   return { t, face: true, pts, blinkL: bs.eyeBlinkLeft, blinkR: bs.eyeBlinkRight, jawOpen: bs.jawOpen,
-    bsBlinkL: bs.eyeBlinkLeft, bsBlinkR: bs.eyeBlinkRight, earL: ear(pts, EYE_L), earR: ear(pts, EYE_R), ...pose };
+    bsBlinkL: bs.eyeBlinkLeft, bsBlinkR: bs.eyeBlinkRight, earL: ear(pts, EYE_L), earR: ear(pts, EYE_R), ...pose,
+    feat: matrix ? frameFeatures(lm, bs, matrix) : null };
 }
 
 // Both eyes through the selected eye CNN in one call; returns P(closed) for [right, left].
@@ -77,6 +80,45 @@ async function classifyEyes(crops) {
   state.inferMs = 0.9 * state.inferMs + 0.1 * (performance.now() - t0);
   const z = out.logits.data;
   return [0, 1].map((k) => 1 / (1 + Math.exp(z[2 * k + 1] - z[2 * k])));  // softmax over 2 classes, class 0 = closed
+}
+
+// ---------------------------------------------------------------- eyeTrack1 (drowsiness over 60 s)
+
+// Frames are sampled 5 times per second into a 60 s buffer (300 frames, as in training: Step 12). Every 2 s,
+// once the buffer is full and a face was found in at least 70% of it, the GRU judges the last minute.
+// Its answer replaces the PERCLOS and yawn rules; the microsleep and eyes-off-the-road rules stay as safety nets.
+const LEVEL_OF_CLASS = [0, 1, 2];  // alert -> OK, low vigilant -> Attention, drowsy -> Take a break
+
+async function temporalStep(f, s) {
+  const T = state.temporal;
+  if (T.lastSample == null || f.t - T.lastSample >= 1 / T.fps - 0.01) {
+    T.lastSample = f.t;
+    const ok = f.face && f.feat;
+    T.buffer.push({ x: ok ? f.feat : null, face: ok });
+    if (T.buffer.length > T.window) T.buffer.shift();
+  }
+  const faceShare = T.buffer.filter((b) => b.face).length / T.window;
+  T.ready = T.buffer.length === T.window && faceShare >= 0.7;
+  if (T.ready && f.t - (T.lastRun ?? -1e9) >= 2) {
+    T.lastRun = f.t;
+    const n = T.features + 1, data = new Float32Array(T.window * n);
+    T.buffer.forEach((b, i) => {
+      if (!b.face) return;  // missing face: zeros and flag 0, as in training
+      for (let k = 0; k < T.features; k++) data[i * n + k] = (b.x[k] - T.mean[k]) / T.std[k];
+      data[i * n + T.features] = 1;
+    });
+    const out = await T.session.run({ input: new ort.Tensor("float32", data, [1, T.window, n]) });
+    const z = Array.from(out.logits.data), m = Math.max(...z), e = z.map((v) => Math.exp(v - m));
+    const probs = e.map((v) => v / e.reduce((a, b) => a + b, 0));
+    T.probs = T.probs ? T.probs.map((p, k) => 0.5 * p + 0.5 * probs[k]) : probs;  // a little smoothing between runs
+  }
+  if (T.probs) {
+    const top = T.probs.indexOf(Math.max(...T.probs));
+    const level = LEVEL_OF_CLASS[top];
+    if (level > s.level) { s.level = level; s.levelName = ["OK", "Attention", "Take a break"][level]; }
+    if (level > 0) s.reasons.push(`eyeTrack1: ${T.classes[top]} ${(T.probs[top] * 100).toFixed(0)}%`);
+  }
+  s.temporal = { ready: T.ready, filled: T.buffer.length / T.fps, probs: T.probs, classes: T.classes, faceShare };
 }
 
 // ---------------------------------------------------------------- loop
@@ -99,6 +141,7 @@ async function loop(id) {
       Object.assign(f, { blinkR: pR, blinkL: pL });
     }
     const s = state.rules.update(f);
+    if (state.temporal) await temporalStep(f, s);
     state.history.push({ t: f.t, closure: f.face ? (f.blinkL + f.blinkR) / 2 : null, level: s.level });
     while (state.history.length && state.history[0].t < f.t - 60) state.history.shift();
     draw(f, v.videoWidth, v.videoHeight);
@@ -144,6 +187,7 @@ const pct = (x, d = 0) => `${(x * 100).toFixed(d)}%`;
 
 function render(f, s) {
   ui.state.dataset.level = String(s.level);
+  ui.app.dataset.level = s.face || s.calibrated ? String(s.level) : "none";  // colours the frame around the video
   ui.stateLabel.textContent = s.face || s.calibrated ? s.levelName : "No face";
   ui.stateSub.textContent = !s.calibrated ? (s.face ? "Calibrating: look at the road (the screen)…" : "Look at the camera")
     : s.reasons.length ? s.reasons.join(" · ") : `${state.model} · all signals normal`;
@@ -164,17 +208,38 @@ function render(f, s) {
     + (s.longClosures ? ` · ${s.longClosures} long` : "");
   ui.yawns.textContent = s.yawns;
   ui.yawnInfo.textContent = s.yawning ? "yawning…" : `head nods: ${s.nods}`;
-  ui.perclos.textContent = s.perclosReady ? pct(s.perclos, 1) : `warming up (${s.observedS.toFixed(0)} / ${RULES.perclosMinS} s)`;
-  ui.perclosBar.style.width = `${Math.min(100, (s.perclos / 0.3) * 100).toFixed(1)}%`;
-  ui.perclosBar.style.background = !s.perclosReady ? "var(--muted)" : s.perclos >= RULES.perclosBreak ? "var(--break)"
-    : s.perclos >= RULES.perclosAttention ? "var(--attention)" : "var(--ok)";
-  ui.perclosInfo.textContent = `Attention at ${pct(RULES.perclosAttention, 1)}, break at ${pct(RULES.perclosBreak)}`;
+  ui.perclos.textContent = s.perclosReady ? pct(s.perclos, 1) : "…";
+  gauge(ui.perclosArc, s.perclos / 0.3, !s.perclosReady ? "var(--muted)" : s.perclos >= RULES.perclosBreak ? "var(--break)"
+    : s.perclos >= RULES.perclosAttention ? "var(--attention)" : "var(--ok)");
+  ui.perclosInfo.textContent = s.perclosReady ? `Attention ${pct(RULES.perclosAttention, 1)} · break ${pct(RULES.perclosBreak)}`
+    : `warming up ${s.observedS.toFixed(0)} / ${RULES.perclosMinS} s`;
   const road = s.road ?? { pitch: 0, yaw: 0 };
   ui.pose.textContent = f.face ? `${(f.pitch - road.pitch).toFixed(0)}° / ${(f.yaw - road.yaw).toFixed(0)}° / ${f.roll.toFixed(0)}°` : "–";
   ui.poseInfo.textContent = s.calibrated ? "pitch and yaw relative to the calibrated road direction" : "calibrating: absolute angles";
-  ui.offroad.textContent = s.offRoad ? `${s.offRoadS.toFixed(1)} s` : "on the road";
-  ui.offroadInfo.textContent = `Attention after ${RULES.offRoadAttentionS} s, break after ${RULES.offRoadBreakS} s`;
+  ui.offroad.textContent = s.offRoad ? `${s.offRoadS.toFixed(1)} s` : s.calibrated ? "0.0 s" : "–";
+  gauge(ui.offroadArc, s.offRoadS / 5, s.offRoadS >= RULES.offRoadBreakS ? "var(--break)"
+    : s.offRoadS >= RULES.offRoadAttentionS ? "var(--attention)" : "var(--ok)");
+  ui.offroadInfo.textContent = `Attention ${RULES.offRoadAttentionS} s · break ${RULES.offRoadBreakS} s`;
   drawSpark();
+  renderTemporal(s.temporal);
+}
+
+// Half-circle gauge (SVG path with pathLength 100): fill to `share` of the scale, in `color`.
+function gauge(el, share, color) {
+  const v = Math.max(0, Math.min(1, share));
+  el.style.strokeDasharray = `${(v * 100).toFixed(1)} 100`;
+  el.style.stroke = color;
+  el.style.opacity = v > 0.004 ? 1 : 0;  // a zero-length line with round ends would still draw a dot
+}
+
+function renderTemporal(t) {
+  ui.temporal.hidden = !t;
+  if (!t) return;
+  ui.temporalInfo.textContent = t.probs ? (t.ready ? "last 60 s, updated every 2 s" : `face found in only ${pct(t.faceShare)} of the last minute`)
+    : `collecting the first minute: ${t.filled.toFixed(0)} / 60 s`;
+  ui.temporalBars.innerHTML = t.classes.map((c, k) => `<div class="tbar"><span>${c}</span><i class="meter"><span style="width:${
+    t.probs ? (t.probs[k] * 100).toFixed(1) : 0}%;background:${["var(--ok)", "var(--attention)", "var(--break)"][k]}"></span></i>` +
+    `<b>${t.probs ? pct(t.probs[k]) : "–"}</b></div>`).join("");
 }
 
 function drawSpark() {
@@ -190,7 +255,7 @@ function drawSpark() {
   ctx.setLineDash([3, 3]);
   ctx.beginPath(); ctx.moveTo(0, Y(RULES.closedBlink)); ctx.lineTo(w, Y(RULES.closedBlink)); ctx.stroke();
   ctx.setLineDash([]);
-  ctx.strokeStyle = "#8b5cf6";
+  ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue("--text").trim() || "#161616";
   ctx.lineWidth = 1.5;
   ctx.beginPath();
   let pen = false;
@@ -254,6 +319,7 @@ function startSource(mirrored) {
   ui.recalibrate.disabled = false;
   state.rules.reset();
   state.history = [];
+  if (state.temporal) Object.assign(state.temporal, { buffer: [], probs: null, lastSample: null, lastRun: null });
   state.source = ui.video;
   state.loopId++;
   loop(state.loopId);
@@ -273,7 +339,7 @@ async function startCamera() {
   ui.video.srcObject = state.stream;
   await ui.video.play();
   ui.viewport.style.aspectRatio = `${ui.video.videoWidth} / ${ui.video.videoHeight}`;
-  ui.camera.textContent = "Stop camera";
+  ui.camera.querySelector("span").textContent = "Stop camera";
   startSource(true);
 }
 
@@ -283,7 +349,7 @@ function stop() {
   state.source = null;
   ui.video.pause();
   ui.video.srcObject = null;
-  ui.camera.textContent = "Start camera";
+  ui.camera.querySelector("span").textContent = "Start camera";
 }
 
 async function openVideo(file) {
@@ -308,13 +374,28 @@ ui.file.addEventListener("change", () => openVideo(ui.file.files[0]));
 ui.recalibrate.addEventListener("click", () => { state.rules.reset(); state.history = []; });
 ui.showCrops.addEventListener("change", () => { ui.crops.hidden = !ui.showCrops.checked; });
 
+// Flash: the screen becomes a white light around the image, for a face in a dark room. F toggles it, Esc ends it.
+function setFlash(on) {
+  document.body.classList.toggle("flash", on);
+  $("flashFrame").hidden = !on;
+  $("flash").setAttribute("aria-pressed", String(on));
+}
+$("flash").addEventListener("click", () => setFlash(!document.body.classList.contains("flash")));
+document.addEventListener("keydown", (e) => {
+  if (e.target.closest?.("input, select, textarea")) return;
+  if (e.key === "f" || e.key === "F") setFlash(!document.body.classList.contains("flash"));
+  if (e.key === "Escape") setFlash(false);
+});
+
 // ---------------------------------------------------------------- model picker
 
 const tip = document.createElement("div");
 tip.className = "model-tip";
 document.body.append(tip);
 
-const tipStats = (m) => (m.mrl_test == null ? "" : `<ul>` +
+const tipStats = (m) => (m.kind === "temporal" ? `<ul><li>new drivers (5-fold CV): ${pct(m.cv_acc, 1)} on 3 classes, ` +
+  `${pct(m.cv_binary, 1)} alert vs drowsy</li><li>${m.train_windows.toLocaleString("en")} windows of 60 s · ` +
+  `${m.params.toLocaleString("en")} parameters</li></ul>` : m.mrl_test == null ? "" : `<ul>` +
   `<li>MRL test (infrared): ${pct(m.mrl_test, 1)} · CEW test (normal camera): ${pct(m.cew_test, 1)}</li>` +
   `<li>simulated webcam, all effects: ${pct(m.webcam_mrl, 1)} / ${pct(m.webcam_cew, 1)}</li>` +
   `<li>${m.train_images.toLocaleString("en")} training eyes · ${m.params.toLocaleString("en")} parameters · ` +
@@ -346,14 +427,20 @@ function buildModels() {
 async function selectModel(version) {
   const m = state.models.find((x) => x.version === version);
   ui.stats.textContent = `loading ${version}…`;
-  if (m.file) {
+  state.eyeModel = null;
+  state.temporal = null;
+  if (m.kind === "temporal") {
+    const session = await ort.InferenceSession.create(m.file, { executionProviders: ["wasm"] });
+    state.temporal = { session, mean: m.mean, std: m.std, fps: m.fps, window: m.window, features: m.features.length,
+      classes: m.classes, buffer: [], probs: null };
+  } else if (m.file) {
     const session = await ort.InferenceSession.create(m.file, { executionProviders: ["wasm"] });
     state.eyeModel = { ...m, session };
-  } else {
-    state.eyeModel = null;
   }
   state.model = version;
-  state.rules.reset();  // never mix closure signals from two models in one PERCLOS window
+  // eyeTrack1 takes over drowsiness: PERCLOS and yawn rules off, microsleep and eyes-off-the-road stay
+  state.rules = new DriverRules(m.kind === "temporal" ? { ...RULES, perclosAttention: Infinity, perclosBreak: Infinity,
+    yawnsAttention: Infinity } : RULES);  // never mix closure signals from two models in one PERCLOS window
   state.history = [];
   state.inferMs = 0;
   for (const chip of ui.models.children) chip.setAttribute("aria-checked", String(chip.dataset.version === version));
@@ -377,7 +464,7 @@ async function init() {
 }
 
 // For tests: feed a video URL and read the latest driver state.
-window.eyeTracker = { state, selectModel, classifyEyes, extractEye, openVideoUrl: async (url) => openVideo(new File([await (await fetch(url)).blob()], "test.mp4", { type: "video/mp4" })) };
+window.eyeTracker = { state, selectModel, classifyEyes, extractEye, temporalStep, openVideoUrl: async (url) => openVideo(new File([await (await fetch(url)).blob()], "test.mp4", { type: "video/mp4" })) };
 
 init().catch((err) => {
   ui.stats.textContent = `error: ${err.message}`;

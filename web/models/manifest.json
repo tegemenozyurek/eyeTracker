@@ -48,6 +48,75 @@
       "cew_test": 0.9670000000000001,
       "webcam_mrl": 0.782,
       "webcam_cew": 0.847
+    },
+    {
+      "version": "eyeTrack1",
+      "kind": "temporal",
+      "file": "models/eyeTrack1.onnx",
+      "features": [
+        "bs_eyeBlinkLeft",
+        "bs_eyeBlinkRight",
+        "bs_eyeSquintLeft",
+        "bs_eyeSquintRight",
+        "bs_eyeLookDownLeft",
+        "bs_eyeLookDownRight",
+        "bs_jawOpen",
+        "ear_left",
+        "ear_right",
+        "mar",
+        "pitch",
+        "yaw",
+        "roll"
+      ],
+      "mean": [
+        0.25014108419418335,
+        0.24087023735046387,
+        0.31103307008743286,
+        0.24447442591190338,
+        0.3387130796909332,
+        0.3244657516479492,
+        0.04107380658388138,
+        0.2363654375076294,
+        0.28139856457710266,
+        0.04094111546874046,
+        -0.10196968168020248,
+        -1.791875958442688,
+        0.23674413561820984
+      ],
+      "std": [
+        0.19221535325050354,
+        0.18921108543872833,
+        0.16903704404830933,
+        0.15847598016262054,
+        0.22730882465839386,
+        0.21506890654563904,
+        0.09333030134439468,
+        0.12409679591655731,
+        0.14730224013328552,
+        0.07659514993429184,
+        12.186901092529297,
+        9.509533882141113,
+        26.232227325439453
+      ],
+      "fps": 5,
+      "window": 300,
+      "classes": [
+        "alert",
+        "low vigilant",
+        "drowsy"
+      ],
+      "params": 3699,
+      "train_windows": 8817,
+      "cv_acc": 0.44380174662583644,
+      "cv_f1": 0.4442361882242158,
+      "cv_binary": 0.6680091052355104,
+      "train_minutes": 0.3,
+      "tagline": "Drowsiness over 60 s (UTA-RLDD)",
+      "changes": [
+        "A GRU reads one minute of 13 face features, 5 times per second",
+        "Trained on 60 real drivers; tested on people it never saw (5-fold)",
+        "Level with the rules on new drivers: an honest result, see the README"
+      ]
     }
   ]
 }
