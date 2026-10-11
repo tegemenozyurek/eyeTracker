@@ -12,7 +12,29 @@ driver's eyes, mouth and head and detects **drowsiness** (eye closure, PERCLOS, 
 **distraction** (eyes off the road), with three alert levels: OK, Attention, Take a break. Face tracking and all models
 run on your device; no frame is ever uploaded.
 
+![The demo in the browser](assets/demo.png)
+
+<sub>The demo at <code>localhost:8010</code>: pick a model at the top, start the camera, and the driver state, PERCLOS and
+eyes-off-the-road gauges, eye closure, blinks, yawns and head pose update every frame.</sub>
+
 ![Showcase](assets/showcase.png)
+
+## How it works
+
+```mermaid
+flowchart LR
+    cam["📷 webcam frame"] --> mp["MediaPipe Face Landmarker<br/>478 landmarks · blendshapes · head pose"]
+    mp --> crop["aligned eye crops<br/>32x32 gray, both eyes"]
+    crop --> cnn["eyeTrack0.1 / eyeTrack0.5<br/>eye CNN: open or closed"]
+    mp --> feat["13 face features<br/>+ 3 blink channels, 5 fps"]
+    feat --> gru["eyeTrack1<br/>GRU over the last 60 s"]
+    cnn --> rules["rules<br/>PERCLOS · microsleep · yawns<br/>nods · eyes off the road"]
+    mp --> rules
+    rules --> alert{{"OK · Attention · Take a break"}}
+    gru --> alert
+```
+
+Everything in the diagram runs in the browser: MediaPipe on the GPU, the models with ONNX Runtime Web (WASM).
 
 ## Run it
 
@@ -33,6 +55,16 @@ Every number below comes from a script in this repo; the full table is [`models/
 
 ![Benchmark](assets/benchmark.png)
 
+<details>
+<summary>📊 Data and splits</summary>
+
+![Data overview](assets/data_overview.png)
+![Subject-wise splits](assets/splits.png)
+
+No person appears in two splits: the test eyes and the test drivers belong to people the models never saw.
+
+</details>
+
 **Eye state (open or closed), people never seen in training:**
 
 | model | what it is | MRL test (infrared) | CEW test (normal camera) | simulated webcam, MRL / CEW | **live pipeline, real faces** |
@@ -45,6 +77,13 @@ The live-pipeline column is the one that matters for the demo: 716 eyes from fac
 exactly what the browser does (MediaPipe → aligned eye crop → model). The simulated webcam degrades test eyes with dim
 light, motion blur, low resolution, sensor noise and landmark jitter all at once; `eyeTrack0.5` trains with similar
 effects, so it is prepared for that test by design.
+
+![Live pipeline on real faces](assets/live_pipeline.png)
+
+![Simulated webcam, one effect at a time](assets/eye_models_webcam.png)
+
+<sub>The same network before and after webcam training: <code>eyeTrack0.1</code> falls to near guessing once all webcam
+effects are combined; <code>eyeTrack0.5</code> keeps 78% / 85%.</sub>
 
 **Drowsiness over 60 s** (UTA-RLDD, 60 real drivers, 5-fold cross-validation, every driver tested by a model that never
 saw them):
@@ -64,6 +103,26 @@ beat the learned rules**: with 36 training drivers per fold, it cannot yet separ
 \* Comparing each driver with their own average over all their recordings lifts the same network above every rule,
 but needs data from several of the driver's sessions, so it is reported as an analysis, not deployed.
 
+![eyeTrack1 vs the rules](assets/eyeTrack1/comparison.png)
+
+<sub>"rules (demo)" in this chart are the first thresholds (7.5% / 15%); "rules (PERCLOS tuned)" is the best-F1-only
+pair from the table. The dashed lines are the paper's HM-LSTM.</sub>
+
+![The rules replayed on UTA-RLDD](assets/rldd/rules_by_class.png)
+
+<sub>Left: PERCLOS rises from alert to drowsy, but the boxes overlap, which is why every method stays below 50% on
+three classes. Right: the rules with their first thresholds; the learned ones warn more often (71.2% of alert windows
+stay OK).</sub>
+
+<details>
+<summary>📈 One driver, alert vs drowsy (features only, no images)</summary>
+
+![One driver's timeline](assets/explore/rldd_timeline.png)
+![The 178 videos](assets/explore/rldd_videos.png)
+![60 s windows per fold](assets/rldd/windows.png)
+
+</details>
+
 **Speed in the browser** (Chrome on an Apple M4, median of 200 frames, [`browser_benchmark.json`](models/browser_benchmark.json)):
 face landmarker 8.5 ms, two aligned eye crops 2.0 ms, `eyeTrack0.5` 3.1 ms for both eyes, features and rules below
 0.1 ms, `eyeTrack1` 0.2 ms per 60 s window: **13.6 ms per frame, up to 74 frames per second**.
@@ -78,6 +137,8 @@ timer against a calibrated road direction turn that into an alert level ([`web/r
 56,704 infrared MRL eyes of 25 people. Excellent on infrared (97.8%) and close to guessing on a simulated webcam: the
 **domain gap**, measured.
 
+![What the model sees](assets/crops.png)
+
 **`eyeTrack0.5`: the same network, ready for a webcam.**
 - **Normal-camera eyes:** CEW added and drawn to fill 30% of every epoch.
 - **Webcam-style augmentation:** blur, noise, dim light, low resolution, zoom and jitter.
@@ -86,11 +147,27 @@ timer against a calibrated road direction turn that into an alert level ([`web/r
 
 On real faces it catches 95.5% of closed eyes where the rules catch 79.9%.
 
+![Webcam-style augmentation](assets/augmentation.png)
+
+<details>
+<summary>🔬 Eye-crop calibration, network size, accuracy per condition</summary>
+
+![Eye-crop calibration](assets/eye_crop/calibration.png)
+![EyeCNN parameters per block](assets/model_summary.png)
+![eyeTrack0.5 under webcam conditions](assets/eyeTrack0.5/webcam_conditions.png)
+
+</details>
+
 **`eyeTrack1`: drowsiness over time.** A bidirectional GRU (3,747 parameters) reads one minute of 13 face features
 at 5 frames per second (eye-blink, squint and look-down scores, jaw opening, eye and mouth openness, head pitch, yaw,
 roll) plus 3 blink channels (eyes closed now, closed for how long, eyelid speed) and says alert, low vigilant or
 drowsy. The live features are computed with the formulas of the dataset's own
 extraction code and checked against Python on real faces (within 1e-4; head angles within 0.002°).
+
+![eyeTrack1 training curves](assets/eyeTrack1/training_curves.png)
+
+<sub>Training accuracy keeps rising while validation (other drivers) stays flat: the network learns the people, not the
+drowsiness. Test fold 4 is the hardest group of drivers.</sub>
 
 ## How it was built
 
