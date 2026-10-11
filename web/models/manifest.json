@@ -66,7 +66,10 @@
         "mar",
         "pitch",
         "yaw",
-        "roll"
+        "roll",
+        "closed",
+        "closed_s",
+        "speed"
       ],
       "mean": [
         0.25014108419418335,
@@ -81,7 +84,10 @@
         0.04094111546874046,
         -0.10196968168020248,
         -1.791875958442688,
-        0.23674413561820984
+        0.23674413561820984,
+        0.11662351340055466,
+        0.16487981379032135,
+        0.23975440859794617
       ],
       "std": [
         0.19221535325050354,
@@ -96,7 +102,10 @@
         0.07659514993429184,
         12.186901092529297,
         9.509533882141113,
-        26.232227325439453
+        26.232227325439453,
+        0.32189497351646423,
+        0.6118621826171875,
+        0.49562862515449524
       ],
       "fps": 5,
       "window": 300,
@@ -105,17 +114,17 @@
         "low vigilant",
         "drowsy"
       ],
-      "params": 3699,
+      "params": 3747,
       "train_windows": 8817,
-      "cv_acc": 0.44380174662583644,
-      "cv_f1": 0.4442361882242158,
-      "cv_binary": 0.6680091052355104,
-      "train_minutes": 0.3,
+      "cv_acc": 0.4491323579448792,
+      "cv_f1": 0.447379623798557,
+      "cv_binary": 0.6687095079670811,
+      "train_minutes": 0.9,
       "tagline": "Drowsiness over 60 s (UTA-RLDD)",
       "changes": [
-        "A GRU reads one minute of 13 face features, 5 times per second",
+        "A GRU reads one minute of 13 face features and 3 blink channels, 5 times per second",
         "Trained on 60 real drivers; tested on people it never saw (5-fold)",
-        "Level with the rules on new drivers: an honest result, see the README"
+        "Roughly level with the rules on new drivers: an honest result, see the README"
       ]
     }
   ]

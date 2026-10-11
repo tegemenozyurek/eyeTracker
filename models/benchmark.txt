@@ -13,16 +13,17 @@ browser, both eyes                    < 0.1 ms        3.1 ms        3.1 ms
 
 DROWSINESS over 60 s (UTA-RLDD, 60 drivers, 5-fold cross-validation, people never seen in training)
 
-                                                      rules (demo)                  PERCLOS, tuned                       eyeTrack1  eyeTrack1 + personal baseline*
-3 classes, window accuracy                                   44.8%                           48.1%                           44.4%                           49.7%
-3 classes, macro F1                                          41.7%                           48.3%                           44.4%                           49.9%
-3 classes, video accuracy                                    44.6%                           47.0%                           44.0%                           47.0%
-alert vs drowsy, window accuracy                             68.7%                           65.5%                           66.8%                           72.4%
-parameters                                                       -                    2 thresholds                           3,699                           3,699
-browser, one 60 s window                                         -                               -                          0.2 ms                (not deployable)
+                                     rules, first thresholds     rules, learned (demo)          PERCLOS, best F1                 eyeTrack1     eyeTrack1 + baseline*
+3 classes, window accuracy                             44.8%                     46.3%                     48.1%                     44.9%                     49.7%
+3 classes, macro F1                                    41.7%                     44.7%                     48.3%                     44.7%                     49.9%
+3 classes, video accuracy                              44.6%                         -                     47.0%                     43.5%                     47.0%
+alert vs drowsy, window accuracy                       68.7%                     68.8%                     65.5%                     66.9%                     72.4%
+parameters                                                 -              2 thresholds              2 thresholds                     3,747                         -
 
+rules, learned: PERCLOS thresholds fitted on 4 folds with >= 70% of alert windows left OK, scored on the 5th (scripts/tune_rules.py);
+  the demo uses the pair fitted on all 60 drivers (4.5% / 11.5%). Video accuracy was not computed for it.
 * compares each driver with their own average over all their recordings: needs data from several sessions,
-  so it is an analysis, not a model the demo can run.
+  so it is an analysis, not a model the demo can run (Step 13 model, without the blink channels).
 Paper (Ghoddoosian et al. 2019, Table 2, HM-LSTM on blink features): 54% per blink sequence, 65.2% per video.
 
 BROWSER, time per frame (Chrome/152.0.7977.130, 10 cores, median of 200 frames, page visible: False)

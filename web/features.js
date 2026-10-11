@@ -32,3 +32,21 @@ export function frameFeatures(landmarks, blendshapes, matrix) {
   row.roll = Math.atan2(r(1, 0), r(0, 0)) * deg;
   return FEATURES.map((f) => row[f]);
 }
+
+// Three blink channels for one window: a line-by-line copy of src/blink_channels.py (Step 17b), checked by
+// web/blink_channels.test.mjs. rows: per frame the 13 features above or null (no face); fps: frames per second.
+// Returns per frame [closed, closed_s, speed].
+export function blinkChannels(rows, fps) {
+  const out = [];
+  let acc = 0, prev = null;
+  for (const r of rows) {
+    const face = r !== null;
+    const blink = face ? (r[0] + r[1]) / 2 : 0;
+    const closed = face && blink >= 0.5 ? 1 : 0;
+    acc = (acc + 1 / fps) * closed;
+    const speed = face && prev !== null ? Math.abs(blink - prev) * fps : 0;
+    out.push([closed, Math.min(acc, 3), speed]);
+    prev = face ? blink : null;
+  }
+  return out;
+}

@@ -308,3 +308,20 @@ GitHub Pages site is left for later, by choice.
 **The project in one sentence:** a driver-monitoring demo that runs entirely in the browser, where the eye model
 measurably closes the gap from infrared training data to a webcam, and the drowsiness model honestly shows that, with
 60 drivers, learning does not yet beat a well-chosen classic rule.
+
+## Step 17: drowsiness improvements (after the main plan)
+
+Two attempts to do better on drowsiness, both judged on drivers never seen. **Learned thresholds for the rules**
+([`tune_rules.py`](scripts/tune_rules.py)): the thresholds that maximize accuracy alone (about 2% / 7% PERCLOS) would warn
+half of all alert drivers, which nobody would keep switched on, so the fit now also requires at least 70% of alert
+windows to stay "OK". Cross-validated, that raises the 3-class macro F1 from 39.8% to 44.7% and the share of drowsy
+windows that get a warning from 53.5% to 66.2%, with 71.2% of alert windows left alone; fitted on all 60 drivers it
+gives 4.5% and 11.5%, now in the demo. One rule test had to change: it assumed normal blinking closes the eyes 5% of
+the time, but alert drivers in UTA-RLDD have a median PERCLOS of 1.7%, so the test now blinks 2.5% of the time.
+
+**Blink channels for `eyeTrack1`** ([`src/blink_channels.py`](src/blink_channels.py)): three per-frame signals the
+dataset's authors rely on (eyes closed now, closed for how long, how fast the eyelid moves), computed identically in
+the browser (parity test: 4 real windows within 4.5e-6). Chosen on validation folds (48.6% vs 48.1% macro F1), then
+tested once: 44.9% window accuracy and 44.7% macro F1 (before: 44.4% and 44.4%), alert vs drowsy 66.9%. A small
+gain within the noise; the honest conclusion stays the same: on new drivers, the learned model is level with the
+learned rules, and a personal baseline is what would really help.

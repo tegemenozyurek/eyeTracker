@@ -34,6 +34,7 @@ sys.path.insert(0, str(ROOT))
 from src.runlog import RunLog  # noqa: E402
 from src.style import COLORS, finish, setup  # noqa: E402
 from src.temporal import CLASSES, DrowsinessGRU  # noqa: E402
+from src.blink_channels import CHANNELS, blink_channels  # noqa: E402
 
 DATA = ROOT / "data" / "processed" / "rldd5.npz"
 OUT = ROOT / "models" / "eyeTrack1"
@@ -75,7 +76,7 @@ def macro_f1(y, p, n=3):
 
 def train_one(name, Z, y, tr, va, epochs, args, device, log_lines):
     torch.manual_seed(args.seed)
-    model = DrowsinessGRU(hidden=args.hidden, dropout=args.dropout, proj=args.proj).to(device)
+    model = DrowsinessGRU(n_features=Z.shape[-1], hidden=args.hidden, dropout=args.dropout, proj=args.proj).to(device)
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, epochs)
     Xtr, ytr = torch.from_numpy(Z[tr]).to(device), torch.from_numpy(y[tr]).long().to(device)
@@ -210,11 +211,14 @@ def main():
                         help="selection run: report validation scores only, never touch the test folds")
     parser.add_argument("--tag", default="", help="suffix for run names and outputs of experiments")
     parser.add_argument("--no-final", action="store_true", help="cross-validation only, no model for the demo")
+    parser.add_argument("--blink-channels", action="store_true", help="add 3 derived blink channels (Step 17b)")
     args = parser.parse_args()
     setup()
     device = torch.device(args.device)
     d = np.load(DATA)
     X, M = build_windows(d)
+    if args.blink_channels:
+        X = np.concatenate([X, blink_channels(X, M, int(d["fps"]))], -1)
     y, fold, video = d["win_label"].astype(np.int64), d["win_fold"], d["win_video"]
     global OUT, ASSETS
     OUT, ASSETS = OUT.with_name(f"eyeTrack1{args.tag}"), ASSETS.with_name(f"eyeTrack1{args.tag}")
@@ -224,7 +228,8 @@ def main():
                  f"{int(d['fps'])} fps), {X.shape[-1]} features + face flag | {args.epochs} epochs, batch {args.batch_size}, "
                  f"lr {args.lr}, device {device}"]
     print(log_lines[0])
-    params = sum(p.numel() for p in DrowsinessGRU(hidden=args.hidden, dropout=args.dropout, proj=args.proj).parameters())
+    params = sum(p.numel() for p in DrowsinessGRU(n_features=X.shape[-1] + 1, hidden=args.hidden, dropout=args.dropout,
+                                                  proj=args.proj).parameters())
     subjects = d["win_subject"] if args.subject_norm else None
     name = f"eyeTrack1{args.tag}"
     print(f"{name}: {params:,} parameters, hidden {args.hidden}, dropout {args.dropout}, weight decay {args.weight_decay}, "
@@ -299,7 +304,7 @@ def main():
     model, _, _ = train_one(name, Z, y, np.arange(len(y)), None, final_epochs, args, device, log_lines)
     final_minutes = (time.time() - t0) / 60
     torch.save(model.state_dict(), OUT / "model.pt")
-    config = {**vars(args), "features": [str(f) for f in d["features"]], "fps": int(d["fps"]), "window": int(d["window"]),
+    config = {**vars(args), "features": [str(f) for f in d["features"]] + (CHANNELS if args.blink_channels else []), "fps": int(d["fps"]), "window": int(d["window"]),
               "mean": mean.tolist(), "std": std.tolist(), "classes": CLASSES, "params": params,
               "cv_best_epochs": best_epochs, "final_epochs": final_epochs, "cv_minutes": round(cv_minutes, 1),
               "final_minutes": round(final_minutes, 1), "windows": int(len(y)),

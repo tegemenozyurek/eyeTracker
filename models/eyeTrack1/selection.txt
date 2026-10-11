@@ -9,3 +9,8 @@ SELECTION eyeTrack1_selC0.5: mean best validation macro F1 48.1% (folds [0.464, 
 SELECTION eyeTrack1_selC1.0: mean best validation macro F1 47.5% (folds [0.442, 0.528, 0.527, 0.406, 0.471]), best epochs [1, 15, 5, 3, 9], 14.5 min
 
 Chosen for the demo: C0.5 (best deployable). B is reported as an analysis only.
+
+Step 17b, same protocol (validation folds only):
+SELECTION eyeTrack1_selD: mean best validation macro F1 48.6% (folds [0.464, 0.508, 0.514, 0.443, 0.504]), best epochs [19, 4, 11, 5, 7], 17.2 min
+D = C0.5 + 3 blink channels (closed, closed_s, speed; src/blink_channels.py). D has the best mean validation
+macro F1 (48.6% vs 48.1%), so it replaces C0.5 as eyeTrack1; the margin is within the spread between folds.

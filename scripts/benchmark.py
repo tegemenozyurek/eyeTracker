@@ -47,13 +47,22 @@ def eye_models():
 def drowsiness():
     cfg = json.loads((M / "eyeTrack1" / "config.json").read_text())
     cv = cfg["cv"]
-    rows = {"rules (demo)": cv["rules (demo)"], "PERCLOS, tuned": cv["rules (PERCLOS tuned)"], "eyeTrack1": cv["eyeTrack1"]}
+    tuned = json.loads((M / "rules_tuning.json").read_text())["cv"]
+    rows = {"rules, first thresholds": cv["rules (demo)"],
+            "rules, learned (demo)": {**tuned["F1, >= 70% alert OK"], "video_acc": float("nan")},
+            "PERCLOS, best F1": cv["rules (PERCLOS tuned)"], "eyeTrack1": cv["eyeTrack1"]}
     text = (M / "eyeTrack1_personnorm" / "cv_report.txt").read_text()
-    rows["eyeTrack1 + personal baseline*"] = {"acc": pct(text, r"3 classes, window accuracy\s+([\d.]+)%"),
+    rows["eyeTrack1 + baseline*"] = {"acc": pct(text, r"3 classes, window accuracy\s+([\d.]+)%"),
                                               "f1": pct(text, r"3 classes, macro F1\s+([\d.]+)%"),
                                               "binary_acc": pct(text, r"alert vs drowsy, window accuracy\s+([\d.]+)%"),
                                               "video_acc": pct(text, r"video accuracy \(vote\)\s+([\d.]+)%")}
     return rows, cfg
+
+
+def personnorm_params():
+    """The analysis run's own parameter count (Step 13 model, without the blink channels)."""
+    m = re.search(r"([\d,]+) parameters", (M / "eyeTrack1_personnorm" / "train_log.txt").read_text())
+    return m.group(1) if m else "-"
 
 
 def main():
@@ -79,14 +88,16 @@ def main():
 
     names = list(drowsy)
     lines += ["", "DROWSINESS over 60 s (UTA-RLDD, 60 drivers, 5-fold cross-validation, people never seen in training)", "",
-              f"{'':<34}" + "".join(f"{n:>32}" for n in names)]
+              f"{'':<34}" + "".join(f"{n:>26}" for n in names)]
     for label, k in [("3 classes, window accuracy", "acc"), ("3 classes, macro F1", "f1"), ("3 classes, video accuracy", "video_acc"),
                      ("alert vs drowsy, window accuracy", "binary_acc")]:
-        lines.append(f"{label:<34}" + "".join(f"{drowsy[n][k]:>32.1%}" for n in names))
-    lines += [f"{'parameters':<34}{'-':>32}{'2 thresholds':>32}{cfg['params']:>32,}{cfg['params']:>32,}",
-              f"{'browser, one 60 s window':<34}{'-':>32}{'-':>32}{ms(browser['eyetrack1_window_ms']):>32}{'(not deployable)':>32}",
-              "", "* compares each driver with their own average over all their recordings: needs data from several sessions,",
-              "  so it is an analysis, not a model the demo can run.",
+        lines.append(f"{label:<34}" + "".join(f"{'-' if np.isnan(drowsy[n][k]) else f'{drowsy[n][k]:.1%}':>26}" for n in names))
+    lines += [f"{'parameters':<34}" + "".join(f"{v:>26}" for v in ["-", "2 thresholds", "2 thresholds", f"{cfg['params']:,}",
+                                                                   personnorm_params()]),
+              "", "rules, learned: PERCLOS thresholds fitted on 4 folds with >= 70% of alert windows left OK, scored on the 5th"
+              " (scripts/tune_rules.py);", "  the demo uses the pair fitted on all 60 drivers (4.5% / 11.5%). Video accuracy was not computed for it.",
+              "* compares each driver with their own average over all their recordings: needs data from several sessions,",
+              "  so it is an analysis, not a model the demo can run (Step 13 model, without the blink channels).",
               f"Paper (Ghoddoosian et al. 2019, Table 2, HM-LSTM on blink features): {PAPER['window']:.0%} per blink sequence, "
               f"{PAPER['video']:.1%} per video.",
               "", f"BROWSER, time per frame ({browser['browser']}, {browser['cores']} cores, median of {browser['frames']} frames, "
@@ -130,10 +141,10 @@ def plot(eyes, drowsy, browser):
     names = list(drowsy)
     groups = [("3 classes\nwindow accuracy", "acc"), ("3 classes\nmacro F1", "f1"), ("alert vs drowsy", "binary_acc")]
     x = np.arange(len(groups))
-    colors = [COLORS["series"][4], COLORS["series"][3], COLORS["series"][2], COLORS["series"][2]]
+    colors = [COLORS["series"][4], COLORS["series"][0], COLORS["series"][3], COLORS["series"][2], COLORS["series"][2]]
     for i, n in enumerate(names):
         vals = [drowsy[n][k] for _, k in groups]
-        b = ax.bar(x + (i - 1.5) * 0.2, vals, 0.18, color=colors[i], label=n, hatch="///" if "*" in n else None,
+        b = ax.bar(x + (i - 2) * 0.16, vals, 0.15, color=colors[i], label=n, hatch="///" if "*" in n else None,
                    edgecolor="white" if "*" in n else None, alpha=0.55 if "*" in n else 1)
         for bar, val in zip(b, vals):
             ax.annotate(f"{val:.0%}", (bar.get_x() + bar.get_width() / 2, val), xytext=(0, 2), textcoords="offset points",

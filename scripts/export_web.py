@@ -25,6 +25,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 from src.model import CLASSES, EyeCNN  # noqa: E402
 from src.temporal import CLASSES as STATES, DrowsinessGRU  # noqa: E402
+from src.blink_channels import blink_channels  # noqa: E402
 
 OUT = ROOT / "web" / "models"
 DATA = ROOT / "data" / "processed" / "eyes32.npz"
@@ -93,7 +94,8 @@ def export_temporal(_):
     v = "eyeTrack1"
     folder = ROOT / "models" / v
     config = json.loads((folder / "config.json").read_text())
-    model = DrowsinessGRU(hidden=config["hidden"], dropout=config["dropout"], proj=config["proj"])
+    model = DrowsinessGRU(n_features=len(config["features"]) + 1, hidden=config["hidden"], dropout=config["dropout"],
+                          proj=config["proj"])
     model.load_state_dict(torch.load(folder / "model.pt", map_location="cpu"))
     model.eval()
     path = OUT / f"{v}.onnx"
@@ -119,7 +121,8 @@ def export_temporal(_):
         mask.append(d["face"][start:start + window])
     raw, mask = np.stack(raw), np.stack(mask)
     mean, std = np.array(config["mean"], np.float32), np.array(config["std"], np.float32)
-    z = ((raw - mean) / std) * mask[..., None]
+    full = np.concatenate([raw, blink_channels(raw, mask, config["fps"])], -1) if config.get("blink_channels") else raw
+    z = ((full - mean) / std) * mask[..., None]
     z = np.concatenate([z, mask[..., None]], -1).astype(np.float32)
     with torch.no_grad():
         probs = torch.softmax(model(torch.from_numpy(z)), 1).numpy()
@@ -135,9 +138,9 @@ def export_temporal(_):
             "params": config["params"], "train_windows": config["windows"], "cv_acc": cv["acc"], "cv_f1": cv["f1"],
             "cv_binary": cv["binary_acc"], "train_minutes": config["final_minutes"],
             "tagline": "Drowsiness over 60 s (UTA-RLDD)",
-            "changes": ["A GRU reads one minute of 13 face features, 5 times per second",
+            "changes": ["A GRU reads one minute of 13 face features and 3 blink channels, 5 times per second",
                         "Trained on 60 real drivers; tested on people it never saw (5-fold)",
-                        "Level with the rules on new drivers: an honest result, see the README"]}
+                        "Roughly level with the rules on new drivers: an honest result, see the README"]}
 
 
 if __name__ == "__main__":
