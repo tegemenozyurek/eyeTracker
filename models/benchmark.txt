@@ -1,0 +1,36 @@
+EYE STATE (open / closed), people never seen in training
+
+                                         rules   eyeTrack0.1   eyeTrack0.5
+trained on                             nothing           MRL  MRL+CEW, aug
+MRL test (infrared)                          -         97.8%         98.1%
+CEW test (normal camera)                     -         89.3%         96.7%
+simulated webcam, MRL / CEW                  - 60.6% / 56.3% 78.2% / 84.7%
+live pipeline, 716 real eyes             89.5%         91.5%         96.5%
+  closed eyes caught                     79.9%         89.8%         95.5%
+parameters                                   -       295,266       295,266
+training time (M4)                           -       7.8 min       8.2 min
+browser, both eyes                    < 0.1 ms        3.1 ms        3.1 ms
+
+DROWSINESS over 60 s (UTA-RLDD, 60 drivers, 5-fold cross-validation, people never seen in training)
+
+                                                      rules (demo)                  PERCLOS, tuned                       eyeTrack1  eyeTrack1 + personal baseline*
+3 classes, window accuracy                                   44.8%                           48.1%                           44.4%                           49.7%
+3 classes, macro F1                                          41.7%                           48.3%                           44.4%                           49.9%
+3 classes, video accuracy                                    44.6%                           47.0%                           44.0%                           47.0%
+alert vs drowsy, window accuracy                             68.7%                           65.5%                           66.8%                           72.4%
+parameters                                                       -                    2 thresholds                           3,699                           3,699
+browser, one 60 s window                                         -                               -                          0.2 ms                (not deployable)
+
+* compares each driver with their own average over all their recordings: needs data from several sessions,
+  so it is an analysis, not a model the demo can run.
+Paper (Ghoddoosian et al. 2019, Table 2, HM-LSTM on blink features): 54% per blink sequence, 65.2% per video.
+
+BROWSER, time per frame (Chrome/152.0.7977.130, 10 cores, median of 200 frames, page visible: False)
+
+  MediaPipe face landmarker               8.5 ms
+  two aligned eye crops                   2.0 ms
+  13 eyeTrack1 features                 < 0.1 ms
+  rules                                 < 0.1 ms
+  eyeTrack0.1 (both eyes)                 3.1 ms
+  eyeTrack0.5 (both eyes)                 3.1 ms
+  whole pipeline with eyeTrack0.5        13.6 ms  (up to 74 frames per second)

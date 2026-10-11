@@ -1,0 +1,21 @@
+{
+  "browser": "Chrome/152.0.7977.130",
+  "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Claude/2.31226.1 Chrome/152.0.7977.130 Safari/537.36",
+  "cores": 10,
+  "visible": false,
+  "photos": 8,
+  "frames": 200,
+  "per_frame_ms": {
+    "MediaPipe face landmarker": 8.5,
+    "two aligned eye crops": 2,
+    "13 eyeTrack1 features": 0,
+    "rules": 0,
+    "eyeTrack0.1 (both eyes)": 3.1,
+    "eyeTrack0.5 (both eyes)": 3.1
+  },
+  "eyetrack1_window_ms": 0.2,
+  "total_ms_eyetrack05": 13.6,
+  "mediapipe_delegate": "GPU",
+  "onnx_backend": "wasm",
+  "date": "2026-10-11T00:01:22.311Z"
+}
