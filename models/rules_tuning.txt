@@ -1,0 +1,13 @@
+PERCLOS thresholds on UTA-RLDD, 5-fold cross-validation (8,817 windows of 60 s, 60 drivers; thresholds fitted on 4 folds, scored on the 5th)
+
+                                        current 7.5% / 15%                 best F1     F1, >= 70% alert OK
+3 classes, window accuracy                           43.5%                   48.1%                   46.3%
+3 classes, macro F1                                  39.8%                   48.3%                   44.7%
+alert windows left OK                                81.6%                   50.2%                   71.2%
+drowsy windows with a warning                        53.5%                   82.1%                   66.2%
+alert vs drowsy (any warning)                        68.2%                   65.5%                   68.8%
+thresholds per fold               7.5%/15.0% 7.5%/15.0% ... 2.0%/7.0% 2.0%/7.0% ...4.0%/10.0% 4.0%/9.0% ...
+
+Fitted once on all 60 drivers:
+  best F1                    Attention at PERCLOS >= 1.5%, Take a break at >= 7.0%
+  F1, >= 70% alert OK        Attention at PERCLOS >= 4.5%, Take a break at >= 11.5%

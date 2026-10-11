@@ -3,7 +3,7 @@
 import { FaceLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.1.0/vision_bundle.mjs";
 import { DriverRules, RULES } from "./rules.js";
 import { CORNERS, cropBox, eyeCrop, toGray } from "./eyecrop.js";
-import { frameFeatures } from "./features.js";
+import { FEATURES, blinkChannels, frameFeatures } from "./features.js";
 import * as ort from "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.30.0/dist/ort.wasm.min.mjs";
 
 ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.30.0/dist/";
@@ -101,10 +101,13 @@ async function temporalStep(f, s) {
   T.ready = T.buffer.length === T.window && faceShare >= 0.7;
   if (T.ready && f.t - (T.lastRun ?? -1e9) >= 2) {
     T.lastRun = f.t;
+    // 13 raw features per frame, plus the 3 blink channels computed over this window when the model uses them
+    const channels = T.features > FEATURES.length ? blinkChannels(T.buffer.map((b) => (b.face ? b.x : null)), T.fps) : null;
     const n = T.features + 1, data = new Float32Array(T.window * n);
     T.buffer.forEach((b, i) => {
       if (!b.face) return;  // missing face: zeros and flag 0, as in training
-      for (let k = 0; k < T.features; k++) data[i * n + k] = (b.x[k] - T.mean[k]) / T.std[k];
+      const row = channels ? [...b.x, ...channels[i]] : b.x;
+      for (let k = 0; k < T.features; k++) data[i * n + k] = (row[k] - T.mean[k]) / T.std[k];
       data[i * n + T.features] = 1;
     });
     const out = await T.session.run({ input: new ort.Tensor("float32", data, [1, T.window, n]) });
@@ -454,6 +457,12 @@ async function init() {
   state.models = [RULES_MODEL, ...manifest.models.map((m) => ({ ...m, live: true })), ...COMING];
   buildModels();
   state.cropSpec = await (await fetch("eye_crop.json")).json();
+  // gauge threshold marks from the rules themselves (PERCLOS scale 0-30%, eyes-off-road scale 0-5 s)
+  const mark = (sel, share) => { document.querySelector(sel).style.strokeDasharray = `0 ${(share * 100).toFixed(1)} 0.9 100`; };
+  mark(".tick.a", RULES.perclosAttention / 0.3);
+  mark(".tick.b", RULES.perclosBreak / 0.3);
+  mark(".tick.c", RULES.offRoadAttentionS / 5);
+  mark(".tick.d", RULES.offRoadBreakS / 5);
   const vision = await FilesetResolver.forVisionTasks(MEDIAPIPE);
   state.landmarker = await FaceLandmarker.createFromOptions(vision, {
     baseOptions: { modelAssetPath: LANDMARKER_MODEL, delegate: "GPU" },

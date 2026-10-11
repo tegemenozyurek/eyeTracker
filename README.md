@@ -49,15 +49,18 @@ effects, so it is prepared for that test by design.
 **Drowsiness over 60 s** (UTA-RLDD, 60 real drivers, 5-fold cross-validation, every driver tested by a model that never
 saw them):
 
-| | rules (demo) | PERCLOS, tuned thresholds | `eyeTrack1` | `eyeTrack1` + personal baseline* |
-|---|---:|---:|---:|---:|
-| 3 classes (alert / low vigilant / drowsy), window accuracy | 44.8% | **48.1%** | 44.4% | 49.7% |
-| 3 classes, macro F1 | 41.7% | **48.3%** | 44.4% | 49.9% |
-| alert vs drowsy | **68.7%** | 65.5% | 66.8% | 72.4% |
+| | rules, first thresholds | **rules, learned (demo)** | PERCLOS, best F1 only | `eyeTrack1` | `eyeTrack1` + personal baseline* |
+|---|---:|---:|---:|---:|---:|
+| 3 classes (alert / low vigilant / drowsy), window accuracy | 44.8% | 46.3% | **48.1%** | 44.9% | 49.7% |
+| 3 classes, macro F1 | 41.7% | 44.7% | **48.3%** | 44.7% | 49.9% |
+| alert vs drowsy | 68.7% | **68.8%** | 65.5% | 66.9% | 72.4% |
+| alert windows left without a warning | 80.5% | 71.2% | 50.2% | 74.7% | – |
 
 Chance is 33.3% for three classes. The dataset's authors report 54% per blink sequence and 65.2% per video with an
-HM-LSTM on blink features (Ghoddoosian et al. 2019, Table 2). **`eyeTrack1` does not beat the rules**: with 36
-training drivers per fold, it cannot yet separate drowsiness from who the driver is.
+HM-LSTM on blink features (Ghoddoosian et al. 2019, Table 2). The demo's rules use PERCLOS thresholds learned from the
+data (4.5% / 11.5%): the best macro F1 that still leaves at least 70% of alert windows without a warning, because the
+best-F1-only pair would warn half of all alert drivers ([`tune_rules.py`](scripts/tune_rules.py)). **`eyeTrack1` does not
+beat the learned rules**: with 36 training drivers per fold, it cannot yet separate drowsiness from who the driver is.
 \* Comparing each driver with their own average over all their recordings lifts the same network above every rule,
 but needs data from several of the driver's sessions, so it is reported as an analysis, not deployed.
 
@@ -83,9 +86,10 @@ timer against a calibrated road direction turn that into an alert level ([`web/r
 
 On real faces it catches 95.5% of closed eyes where the rules catch 79.9%.
 
-**`eyeTrack1`: drowsiness over time.** A bidirectional GRU (3,699 parameters) reads one minute of 13 face features
+**`eyeTrack1`: drowsiness over time.** A bidirectional GRU (3,747 parameters) reads one minute of 13 face features
 at 5 frames per second (eye-blink, squint and look-down scores, jaw opening, eye and mouth openness, head pitch, yaw,
-roll) and says alert, low vigilant or drowsy. The live features are computed with the formulas of the dataset's own
+roll) plus 3 blink channels (eyes closed now, closed for how long, eyelid speed) and says alert, low vigilant or
+drowsy. The live features are computed with the formulas of the dataset's own
 extraction code and checked against Python on real faces (within 1e-4; head angles within 0.002°).
 
 ## How it was built
@@ -111,6 +115,7 @@ step are in [NOTES.md](NOTES.md).
 | 14. `eyeTrack1` live | live features checked against training; driver-state panel; responsive redesign | [`step-14`](https://github.com/tegemenozyurek/eyeTracker/tree/step-14-eyetrack1-demo) |
 | 15. Benchmark | all models side by side, browser speed 13.6 ms per frame | [`step-15`](https://github.com/tegemenozyurek/eyeTracker/tree/step-15-benchmark) |
 | 16. README | this page, final cleanup | [`step-16`](https://github.com/tegemenozyurek/eyeTracker/tree/step-16-final-readme) |
+| 17. Drowsiness tuning | rule thresholds learned with few false alarms (macro F1 39.8% → 44.7%); blink channels for `eyeTrack1` (44.4% → 44.9%, within the noise) | [`step-17`](https://github.com/tegemenozyurek/eyeTracker/tree/step-17-drowsiness-tuning) |
 
 <details>
 <summary>Retrain everything from scratch</summary>
@@ -136,7 +141,8 @@ python scripts/export_web.py               # ONNX, checked against PyTorch
 python scripts/check_live_pipeline.py      # MediaPipe -> crop -> model on real test faces
 
 python scripts/prepare_rldd.py             # 60 s windows, folds, rules replayed (needs Node.js)
-python scripts/train_eyetrack1.py --person-aug 0.5 --lr 1e-3 --epochs 20
+python scripts/tune_rules.py              # the demo's PERCLOS thresholds
+python scripts/train_eyetrack1.py --person-aug 0.5 --lr 1e-3 --epochs 20 --blink-channels
 python scripts/benchmark.py && python scripts/make_showcase.py
 ```
 
@@ -146,7 +152,7 @@ python scripts/benchmark.py && python scripts/make_showcase.py
 
 ## Limitations
 
-- **`eyeTrack1` is not better than the rules on new drivers** (44.4% vs 44.8%, 3 classes). Differences between people
+- **`eyeTrack1` is not better than the rules on new drivers** (44.9% vs 46.3% for the learned rules, 3 classes). Differences between people
   are larger than the differences between alert and drowsy in one person; a personal baseline would help, but needs
   several sessions of the same driver.
 - **Drowsiness labels are self-reported** for whole videos (median 10.1 to 10.2 minutes per class), so a "drowsy" video can contain alert minutes. The
