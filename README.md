@@ -12,6 +12,8 @@ driver's eyes, mouth and head and detects **drowsiness** (eye closure, PERCLOS, 
 **distraction** (eyes off the road), with three alert levels: OK, Attention, Take a break. Face tracking and all models
 run on your device; no frame is ever uploaded.
 
+**▶ [Try the live demo](https://tegemenozyurek.github.io/eyeTracker/)**
+
 ![The demo in the browser](assets/demo.png)
 
 <sub>The demo at <code>localhost:8010</code>: pick a model at the top, start the camera, and the driver state, PERCLOS and
@@ -37,6 +39,11 @@ flowchart LR
 Everything in the diagram runs in the browser: MediaPipe on the GPU, the models with ONNX Runtime Web (WASM).
 
 ## Run it
+
+**Live demo: [tegemenozyurek.github.io/eyeTracker](https://tegemenozyurek.github.io/eyeTracker/)** (Chrome or Edge;
+nothing to install, the camera feed never leaves your device).
+
+Or run it locally:
 
 ```bash
 git clone https://github.com/tegemenozyurek/eyeTracker.git
