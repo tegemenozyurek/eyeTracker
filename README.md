@@ -1,5 +1,6 @@
 # 👁️ eyeTracker
 
+[![Live demo](https://img.shields.io/badge/live%20demo-open%20in%20browser-2EA44F?logo=googlechrome&logoColor=white)](https://tegemenozyurek.github.io/eyeTracker/)
 [![Python](https://img.shields.io/badge/python-3.12-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.x-EE4C2C?logo=pytorch&logoColor=white)](https://pytorch.org/)
 [![MediaPipe](https://img.shields.io/badge/MediaPipe-face%20landmarker-0097A7?logo=google&logoColor=white)](https://ai.google.dev/edge/mediapipe/solutions/vision/face_landmarker)
@@ -14,7 +15,7 @@ run on your device; no frame is ever uploaded.
 
 **▶ [Try the live demo](https://tegemenozyurek.github.io/eyeTracker/)**
 
-![The demo in the browser](assets/demo.png)
+[![The demo in the browser](assets/demo.png)](https://tegemenozyurek.github.io/eyeTracker/)
 
 <sub>The demo at <code>localhost:8010</code>: pick a model at the top, start the camera, and the driver state, PERCLOS and
 eyes-off-the-road gauges, eye closure, blinks, yawns and head pose update every frame.</sub>
